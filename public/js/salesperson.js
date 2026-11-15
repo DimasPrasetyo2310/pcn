@@ -75,6 +75,8 @@ function render(r){
   $('s-mb').className=cls(mp);
   $('s-mn').textContent='Actual Rp '+rp(mA)+' dari budget Rp '+rp(mB);
 
+  const st=t=>{if(!t)return '–';const d=new Date(t);return isNaN(d)?'–':d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()+', '+String(d.getHours()).padStart(2,'0')+'.'+String(d.getMinutes()).padStart(2,'0')};
+  $('stamp').textContent='Jadwal diunggah: '+st(r.sched_at)+' · Data penjualan diunggah: '+st(r.data_at)+' · Dimuat: '+st(new Date().toISOString());
   $('login').hidden=true;$('view').hidden=false;
 }
 
@@ -111,7 +113,7 @@ async function load(code,fromForm){
     try{sessionStorage.setItem(SKEY,code)}catch(e){}
     render(r);
     clearInterval(timer);
-    timer=setInterval(()=>{if(!document.hidden)load(CODE,false)},60000);
+    timer=setInterval(()=>{if(!document.hidden)load(CODE,false)},30000);
   }catch(e){
     if(fromForm||$('login').hidden){showLogin();showErr('Gagal terhubung. Periksa internet Anda lalu coba lagi.')}
   }finally{

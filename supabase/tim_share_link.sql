@@ -27,3 +27,4 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 -- Halaman: public/salesperson.html?k=<key>
 -- Migrasi 'sp_view_items': sp_view_data kini juga mengembalikan 'it' (rincian item per hari:
 -- [category, master brand, no item, deskripsi, qty, value]) di setiap elemen 'sales'.
+-- Migrasi 'sp_view_stamps': sp_view_data juga mengembalikan sched_at dan data_at (waktu unggah terakhir).
