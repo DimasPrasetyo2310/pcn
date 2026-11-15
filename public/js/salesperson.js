@@ -14,7 +14,7 @@ const fdl=iso=>{const d=new Date(iso+'T00:00:00');return d.getDate()+' '+MON[d.g
 const cls=p=>p==null?'na':p>=100?'gd':p>=75?'am':'bd';
 const pct=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
 const SKEY='sp_code_'+KEY;
-let CODE='',timer=null;
+let CODE='',timer=null,RD=null;
 
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function showErr(m){const e=$('err');e.textContent=m;e.hidden=!m}
@@ -27,6 +27,7 @@ async function fetchData(code){
 }
 
 function render(r){
+  RD=r;
   const p=r.p,dates=r.dates||[],sales={};
   (r.sales||[]).forEach(x=>{sales[x.d]=Number(x.s)||0});
   const last=r.last||null;
@@ -48,7 +49,7 @@ function render(r){
     if(!fut){ tB+=b; tA+=a; if(w){mB+=b;mA+=a;} }
     const pp=(w&&b>0&&!fut)?a/b*100:null;
     const today=last&&d===last;
-    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td><td>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td></tr>';
+    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td><td'+(fut||!a?'':' class="clk" data-d="'+d+'" title="Lihat item"')+'>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td></tr>';
   });
   const mp=mB>0?mA/mB*100:null;
   rows+='<tr class="tot"><td>TOTAL s.d. '+(last?esc(fdl(last)):'-')+'</td><td class="c"></td><td>'+rp(mB)+'</td><td>'+rp(mA)+'</td><td class="'+cls(mp)+'">'+pct(mp)+'</td></tr>';
@@ -62,14 +63,14 @@ function render(r){
   const dp=(lw&&tpe>0)?da/tpe*100:null;
   $('s-dd').textContent=last?fd(last):'Belum ada data';
   $('s-dp').textContent=dp==null?'–':pct(dp);
-  $('s-dp').className='big '+cls(dp);
+  $('s-dp').className='big clk '+cls(dp);
   $('s-db').style.width=Math.min(100,Math.max(0,dp||0))+'%';
   $('s-db').className=cls(dp);
   $('s-dn').textContent=last?(lw?('Actual Rp '+rp(da)+' dari budget Rp '+rp(tpe)):'Hari ini libur/cuti, tidak ada budget'):'';
   // MTD
   $('s-md').textContent=last?('1 s.d. '+fdl(last)):'Belum ada data';
   $('s-mp').textContent=pct(mp);
-  $('s-mp').className='big '+cls(mp);
+  $('s-mp').className='big clk '+cls(mp);
   $('s-mb').style.width=Math.min(100,Math.max(0,mp||0))+'%';
   $('s-mb').className=cls(mp);
   $('s-mn').textContent='Actual Rp '+rp(mA)+' dari budget Rp '+rp(mB);
@@ -77,6 +78,21 @@ function render(r){
   $('login').hidden=true;$('view').hidden=false;
 }
 
+
+function itemsFor(dts){
+  const set=new Set(dts),m={};
+  (RD.sales||[]).forEach(x=>{ if(!set.has(x.d)) return; (x.it||[]).forEach(e=>{const k=e[2]||e[3];const t=m[k]||(m[k]=[e[0],e[1],e[2],e[3],0,0]);t[4]+=Number(e[4])||0;t[5]+=Number(e[5])||0}); });
+  return Object.values(m).sort((a,b)=>b[5]-a[5]);
+}
+const tc=s=>String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+function openPop(title,per,dts){
+  const it=itemsFor(dts),tq=it.reduce((s,e)=>s+e[4],0),ts=it.reduce((s,e)=>s+e[5],0);
+  $('pop-t').textContent=title;$('pop-per').textContent=per+' · penjualan tanpa PPN';
+  $('pop-body').innerHTML=it.length?'<table><thead><tr><th class="l">Category</th><th class="l">Master brand</th><th class="l">No Item</th><th class="l">Description</th><th>Qty</th><th>Value (Rp)</th></tr></thead><tbody>'+it.map(e=>'<tr><td class="l">'+esc(tc(e[0]))+'</td><td class="l">'+esc(tc(e[1]))+'</td><td class="l">'+esc(e[2])+'</td><td class="w">'+esc(e[3])+'</td><td>'+rp(e[4])+'</td><td>'+rp(e[5])+'</td></tr>').join('')+'<tr class="tot"><td class="l" colspan="4">TOTAL ('+it.length+' item)</td><td>'+rp(tq)+'</td><td>'+rp(ts)+'</td></tr></tbody></table>':'<p class="note" style="padding:16px">Belum ada rincian item untuk periode ini.</p>';
+  $('pop').hidden=false;$('pop-body').scrollTop=0;$('pop-x').focus();
+}
+function workDates(upTo){ const p=RD.p; return (RD.dates||[]).filter((d,i)=>d<=upTo&&isWork(p.c[i])); }
+function closePop(){$('pop').hidden=true}
 async function load(code,fromForm){
   const btn=$('go');
   if(fromForm){btn.disabled=true;btn.textContent='Memuat...';showErr('')}
@@ -117,6 +133,12 @@ function init(){
     if(!v){showErr('Masukkan kode salesperson Anda.');return}
     load(v,true);
   });
+  $('pop-x').addEventListener('click',closePop);
+  $('pop').addEventListener('click',e=>{if(e.target===$('pop'))closePop()});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop()});
+  $('s-dp').addEventListener('click',()=>{if(RD&&RD.last)openPop('Item terjual · Daily',fdl(RD.last),[RD.last])});
+  $('s-mp').addEventListener('click',()=>{if(RD&&RD.last)openPop('Item terjual · MTD','1 s.d. '+fdl(RD.last)+' (hari kerja)',workDates(RD.last))});
+  $('t-body').addEventListener('click',e=>{const c=e.target.closest('td[data-d]');if(c)openPop('Item terjual · '+fd(c.dataset.d),fdl(c.dataset.d),[c.dataset.d])});
   $('switch').addEventListener('click',()=>{try{sessionStorage.removeItem(SKEY)}catch(e){}CODE='';$('code').value='';showErr('');showLogin()});
   $('reload').addEventListener('click',()=>load(CODE,false));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CODE&&!$('view').hidden)load(CODE,false)});

@@ -25,3 +25,5 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 --   insert into share_links(token, store_code, label, scope) values ('<key>', '10005', 'Link salesperson', 'sales');
 --   update share_links set revoked = true where token = '<key>';
 -- Halaman: public/salesperson.html?k=<key>
+-- Migrasi 'sp_view_items': sp_view_data kini juga mengembalikan 'it' (rincian item per hari:
+-- [category, master brand, no item, deskripsi, qty, value]) di setiap elemen 'sales'.

@@ -670,6 +670,20 @@ function renderTopBrand(){
 
 /* Tampilan salesperson (validasi TL): sama dengan halaman link kode salesperson */
 let spSel='';
+function spOpen(k){
+  const e=SCHM[spSel], last=dates[dates.length-1]; if(!e||!last) return;
+  let dts,ttl,per; const lf=d=>fd(d,{day:'numeric',month:'short',year:'numeric'});
+  if(k==='D'){ dts=[last]; ttl='Item terjual · Daily'; per=lf(last); }
+  else if(k==='M'){ dts=SCH.dates.filter((d,i)=>d<=last&&isWork(e.c[i])); ttl='Item terjual · MTD'; per='1 s.d. '+lf(last)+' (hari kerja)'; }
+  else { dts=[k]; ttl='Item terjual · '+fd(k,{weekday:'short',day:'numeric',month:'short'}); per=lf(k); }
+  const m={}; dts.forEach(d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); if(q&&Array.isArray(q.it)) q.it.forEach(r=>{ const key=r[2]||r[3]; const t=m[key]||(m[key]=[r[0],r[1],r[2],r[3],0,0]); t[4]+=r[4]; t[5]+=r[5]; }); });
+  const it=Object.values(m).sort((a,b)=>b[5]-a[5]), tq=it.reduce((s,r)=>s+r[4],0), ts=it.reduce((s,r)=>s+r[5],0);
+  const html=it.length? '<table class="pt"><thead><tr><th>Category</th><th>Master brand</th><th>No Item</th><th>Description</th><th class="rt">Qty</th><th class="rt">Value</th></tr></thead><tbody>'+it.map(r=>'<tr><td>'+esc(title(r[0]))+'</td><td>'+esc(title(r[1]))+'</td><td class="num">'+esc(r[2])+'</td><td>'+esc(r[3])+'</td><td class="num rt">'+fmtN.format(r[4])+'</td><td class="num rt">'+fmtN.format(r[5])+'</td></tr>').join('')+'<tr class="tot"><td colspan="4"><b>TOTAL ('+it.length+' item)</b></td><td class="num rt"><b>'+fmtN.format(tq)+'</b></td><td class="num rt"><b>'+fmtN.format(ts)+'</b></td></tr></tbody></table>' : '<p class="note" style="padding:14px 4px">Belum ada rincian item untuk periode ini.</p>';
+  kShow(ttl,[['Salesperson',e.name||e.id],['Sales ID',e.id],['Zonasi',e.zona||'–'],['Total value','Rp '+fmtN.format(ts)]],html,null);
+  $('kpop-per').textContent=per+' · sales exclude PPN';
+}
+document.addEventListener('click',ev=>{ const c=ev.target.closest&&ev.target.closest('#sp-body [data-spd]'); if(!c) return; spOpen(c.dataset.spd); });
+document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-body .bg[data-spd]')) spOpen(ev.target.dataset.spd); });
 function renderSP(){
   const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
   const ppl=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
@@ -683,14 +697,14 @@ function renderSP(){
   SCH.dates.forEach((d,i)=>{ const c=e.c[i], w=isWork(c), fut=!last||d>last, b=w?e.tpe:0, a=sales[d]||0;
     if(w) monthB+=b; if(!fut&&w){ mB+=b; mA+=a; }
     const pp=(w&&b>0&&!fut)?a/b*100:null;
-    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td>'+(fut?'':nn(a))+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td></tr>'; });
+    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td'+(fut||!a?'':' class="spk" data-spd="'+d+'" title="Lihat item"')+'>'+(fut?'':nn(a))+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td></tr>'; });
   const mp=mB>0?mA/mB*100:null;
   rows+='<tr class="tt"><td>TOTAL s.d. '+esc(last?fd(last,{day:'numeric',month:'short'}):'-')+'</td><td></td><td>'+nn(mB)+'</td><td>'+nn(mA)+'</td><td>'+pc(mp)+'</td></tr>';
   const li=SCH.dates.indexOf(last), lw=li>=0&&isWork(e.c[li]), da=last?(sales[last]||0):0, dp=(lw&&e.tpe>0)?da/e.tpe*100:null;
   box.innerHTML='<div class="spv"><b style="font-size:18px">'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id)+'</span>'+
     '<div class="spi"><div><small>Zonasi</small><b>'+esc(e.zona||'–')+'</b></div><div><small>Category</small><b>'+esc(e.cat||'–')+'</b></div><div><small>Master brand</small><b>'+esc(e.brand||'–')+'</b></div></div>'+
-    '<div class="sps"><div><small>Achievement Daily</small><div class="note">'+(last?esc(fd(last,{weekday:'short',day:'numeric',month:'short'})):'Belum ada data')+'</div><div class="bg '+cls(dp)+'">'+pc(dp)+'</div><div class="note">'+(lw?'Actual Rp '+nn(da)+' dari budget Rp '+nn(e.tpe):'Libur/cuti, tidak ada budget')+'</div></div>'+
-    '<div><small>Achievement MTD</small><div class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short',year:'numeric'})):'Belum ada data')+'</div><div class="bg '+cls(mp)+'">'+pc(mp)+'</div><div class="note">Actual Rp '+nn(mA)+' dari budget Rp '+nn(mB)+'</div></div></div>'+
+    '<div class="sps"><div><small>Achievement Daily</small><div class="note">'+(last?esc(fd(last,{weekday:'short',day:'numeric',month:'short'})):'Belum ada data')+'</div><div class="bg spk '+cls(dp)+'" data-spd="D" tabindex="0" role="button">'+pc(dp)+'</div><div class="note">'+(lw?'Actual Rp '+nn(da)+' dari budget Rp '+nn(e.tpe):'Libur/cuti, tidak ada budget')+'</div></div>'+
+    '<div><small>Achievement MTD</small><div class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short',year:'numeric'})):'Belum ada data')+'</div><div class="bg spk '+cls(mp)+'" data-spd="M" tabindex="0" role="button">'+pc(mp)+'</div><div class="note">Actual Rp '+nn(mA)+' dari budget Rp '+nn(mB)+'</div></div></div>'+
     '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Actual</th><th>%</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='sp-sel'){ spSel=ev.target.value; renderSP(); } });
