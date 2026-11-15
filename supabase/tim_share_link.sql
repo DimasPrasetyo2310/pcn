@@ -16,3 +16,12 @@ revoke all on function public.tim_view_data(text) from public;
 grant execute on function public.tim_view_data(text) to anon, authenticated;
 -- Buat link baru:  insert into public.share_links(token,store_code,label) values (replace(gen_random_uuid()::text,'-',''),'10005','Tim sales') returning token;
 -- Matikan link:    update public.share_links set revoked = true where token = '...';
+
+-- ===== Link salesperson (kode salesperson) =====
+-- Migrasi 'sales_self_view' sudah diterapkan: kolom share_links.scope ('tim'|'sales'),
+-- tim_view_data hanya menerima scope='tim', dan fungsi sp_view_data(p_key, p_code)
+-- (SECURITY DEFINER, hanya mengembalikan data 1 salesperson untuk key scope='sales').
+-- Buat/cabut key:
+--   insert into share_links(token, store_code, label, scope) values ('<key>', '10005', 'Link salesperson', 'sales');
+--   update share_links set revoked = true where token = '<key>';
+-- Halaman: public/salesperson.html?k=<key>
