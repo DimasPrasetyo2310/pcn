@@ -667,7 +667,34 @@ function renderTopBrand(){
   else t.innerHTML='<table class="pt"><thead><tr><th>Master brand</th><th class="rt">Qty</th><th class="rt">Value</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+esc(title(r.k))+'</td><td class="num rt">'+fmtN.format(r.q)+'</td><td class="num rt">'+rp(r.s)+'</td></tr>').join('')+'</tbody></table>';
   const n=$('tb-note'); n.hidden=!M.mbMiss; n.textContent=M.mbMiss? M.mbMiss+' tanggal belum memuat data master brand. Unggah ulang laporan tanggal tersebut agar ikut terhitung.':'';
 }
-function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderTable(); renderLow(); renderFoot(); }
+
+/* Tampilan salesperson (validasi TL): sama dengan halaman link kode salesperson */
+let spSel='';
+function renderSP(){
+  const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
+  const ppl=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
+  if(!ppl.length){ sel.innerHTML=''; box.innerHTML='<p class="note">Unggah file jadwal &amp; target untuk menampilkan tampilan ini.</p>'; return; }
+  if(!ppl.some(e=>e.id===spSel)) spSel=ppl[0].id;
+  sel.innerHTML=ppl.map(e=>'<option value="'+esc(e.id)+'"'+(e.id===spSel?' selected':'')+'>'+esc((e.name||e.id)+' · '+e.id.replace(/^S\d+-0*/,''))+'</option>').join('');
+  const nn=v=>fmtN.format(Math.round(v)); const e=SCHM[spSel], last=dates[dates.length-1]||'';
+  const cls=p=>p==null?'spn':p>=100?'spg':p>=75?'spa':'spb', pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
+  const sales={}; dates.forEach(d=>{ const q=(days[d].people||[]).find(x=>x.id===spSel); sales[d]=q?(+q.sales||0):0; });
+  let mB=0,mA=0,monthB=0,rows='';
+  SCH.dates.forEach((d,i)=>{ const c=e.c[i], w=isWork(c), fut=!last||d>last, b=w?e.tpe:0, a=sales[d]||0;
+    if(w) monthB+=b; if(!fut&&w){ mB+=b; mA+=a; }
+    const pp=(w&&b>0&&!fut)?a/b*100:null;
+    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td>'+(fut?'':nn(a))+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td></tr>'; });
+  const mp=mB>0?mA/mB*100:null;
+  rows+='<tr class="tt"><td>TOTAL s.d. '+esc(last?fd(last,{day:'numeric',month:'short'}):'-')+'</td><td></td><td>'+nn(mB)+'</td><td>'+nn(mA)+'</td><td>'+pc(mp)+'</td></tr>';
+  const li=SCH.dates.indexOf(last), lw=li>=0&&isWork(e.c[li]), da=last?(sales[last]||0):0, dp=(lw&&e.tpe>0)?da/e.tpe*100:null;
+  box.innerHTML='<div class="spv"><b style="font-size:18px">'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id)+'</span>'+
+    '<div class="spi"><div><small>Zonasi</small><b>'+esc(e.zona||'–')+'</b></div><div><small>Category</small><b>'+esc(e.cat||'–')+'</b></div><div><small>Master brand</small><b>'+esc(e.brand||'–')+'</b></div></div>'+
+    '<div class="sps"><div><small>Achievement Daily</small><div class="note">'+(last?esc(fd(last,{weekday:'short',day:'numeric',month:'short'})):'Belum ada data')+'</div><div class="bg '+cls(dp)+'">'+pc(dp)+'</div><div class="note">'+(lw?'Actual Rp '+nn(da)+' dari budget Rp '+nn(e.tpe):'Libur/cuti, tidak ada budget')+'</div></div>'+
+    '<div><small>Achievement MTD</small><div class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short',year:'numeric'})):'Belum ada data')+'</div><div class="bg '+cls(mp)+'">'+pc(mp)+'</div><div class="note">Actual Rp '+nn(mA)+' dari budget Rp '+nn(mB)+'</div></div></div>'+
+    '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Actual</th><th>%</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='sp-sel'){ spSel=ev.target.value; renderSP(); } });
+function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));
 $('topn').addEventListener('change',e=>{ S.topn=parseInt(e.target.value,10); renderRank(); });
