@@ -38,3 +38,6 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 -- migration sp_view_pb_cats: sp_view_data per hari juga mengembalikan pb (penjualan Master Type Private Brand) dan cats (penjualan per category).
 
 -- migration sp_view_zone_pbc: sp_view_data mengembalikan zcats (category di zonasi salesperson) dan pbc per hari (penjualan Private Brand per category).
+
+-- migration sp_pin_approval: tabel sp_pins (hash PIN bcrypt, tanpa akses langsung), fungsi sp_pin_status, sp_pin_admin_list, sp_pin_admin_set (admin), sp_pin_change (ganti PIN sendiri), sp_approve (approval TL/MOD dengan PIN 6 digit; salah 5x = kunci 5 menit; MOD hanya setelah TL; batal TL ditolak bila MOD sudah approve).
+-- Policy insert/update langsung pada sp_approvals dihapus: approval hanya lewat sp_approve.

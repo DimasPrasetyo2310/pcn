@@ -678,6 +678,8 @@ async function spLoadRole(email){
   const m=(data||[]).find(r=>String(r.email).toLowerCase()===String(email).toLowerCase());
   spMgr=!!m; spJab=m?(m.jabatan||'Manager'):'';
   if(m&&$('who-role')) $('who-role').textContent=spJab; else if(canWrite===true&&$('who-role')) $('who-role').textContent='Team Leader';
+  try{ const { data:st } = await SB.rpc('sp_pin_status'); pinInfo=st||null; }catch(e){ pinInfo=null; }
+  const pb=$('sp-pinbtns'); if(pb){ pb.hidden=!(pinInfo&&(pinInfo.role==='editor'||pinInfo.role==='admin')); const ad=$('pin-adm'); if(ad) ad.hidden=!(pinInfo&&pinInfo.role==='admin'); const nt=$('pin-note'); if(nt) nt.textContent=(pinInfo&&!pinInfo.has_pin&&pinInfo.role!=='viewer')?'PIN approval Anda belum diatur. Minta admin mengatur PIN.':''; }
   renderSP(true);
 }
 async function spLoadAppr(){
@@ -687,6 +689,42 @@ async function spLoadAppr(){
   if(error){ spApprT[id]=0; return; }
   const o={}; (data||[]).forEach(r=>{ o[r.sale_date]=r; }); spAppr[id]=o; if(id===spSel) renderSP(true);
 }
+let pinInfo=null;
+function pinOv(html){ let o=$('pin-ov'); if(!o){ o=document.createElement('div'); o.id='pin-ov'; o.className='pinov'; o.addEventListener('click',ev=>{ if(ev.target===o||(ev.target.closest&&ev.target.closest('[data-pinx]'))) pinClose(); }); document.body.appendChild(o); } o.innerHTML='<div class="pinbox" role="dialog" aria-modal="true">'+html+'</div>'; o.hidden=false; const f=o.querySelector('input'); if(f) f.focus(); }
+function pinClose(){ const o=$('pin-ov'); if(o) o.hidden=true; }
+document.addEventListener('keydown',ev=>{ if(ev.key==='Escape') pinClose(); });
+function pinErr(r){ const m={nopin:'PIN Anda belum diatur. Minta admin mengatur PIN.',locked:'Terlalu banyak salah. Coba lagi dalam '+(r.wait||5)+' menit.',bad:'PIN salah. Sisa percobaan: '+r.left+'.',role:'Akun Anda tidak punya izin.',role_tl:'Approval TL hanya untuk Team Leader.',role_mod:'Approval MOD hanya untuk Store Manager / Asst Manager.',need_tl:'Approval TL harus dilakukan lebih dulu.',mod_first:'Batalkan Approval MOD lebih dulu.',format:'PIN harus 6 digit angka.',nouser:'Akun tidak ditemukan.',kind:'Permintaan tidak valid.'}; return m[r.err]||'Gagal ('+(r.err||'error')+').'; }
+const pinIn=(id,ph)=>'<input id="'+id+'" type="password" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="'+ph+'">';
+document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('#sp-list .spap'); if(!b) return;
+  const k=b.dataset.k, id=b.dataset.id, d=b.dataset.d, on=b.dataset.on==='1', e=SCHM[id];
+  pinOv('<h3>'+(on?'Approve ':'Batalkan ')+k.toUpperCase()+'</h3><p class="note">'+esc((e&&e.name)||id)+' · '+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</p>'+pinIn('pin-in','PIN 6 digit')+'<div class="pinerr" id="pin-err"></div><div class="pinbt"><button class="btn sm" data-pinx>Batal</button><button class="btn sm pri" id="pin-ok">Konfirmasi</button></div>');
+  const go=async()=>{ const v=$('pin-in').value.trim(); if(!/^\d{6}$/.test(v)){ $('pin-err').textContent='Masukkan PIN 6 digit.'; return; }
+    $('pin-ok').disabled=true; const { data, error } = await SB.rpc('sp_approve',{p_store:D.code,p_sales_id:id,p_date:d,p_kind:k,p_pin:v,p_on:on}); $('pin-ok').disabled=false;
+    if(error||!data){ $('pin-err').textContent='Gagal menghubungi server. Coba lagi.'; return; }
+    if(!data.ok){ $('pin-err').textContent=pinErr(data); $('pin-in').value=''; $('pin-in').focus(); return; }
+    (spAppr[id]||(spAppr[id]={}))[d]=data.row; pinClose(); renderSP(true); };
+  $('pin-ok').onclick=go; $('pin-in').onkeydown=x=>{ if(x.key==='Enter') go(); };
+});
+function pinChange(){
+  pinOv('<h3>Ganti PIN saya</h3><p class="note">PIN 6 digit angka. Jangan dibagikan ke orang lain.</p>'+pinIn('pc-old','PIN lama')+pinIn('pc-new','PIN baru (6 digit)')+pinIn('pc-new2','Ulangi PIN baru')+'<div class="pinerr" id="pin-err"></div><div class="pinbt"><button class="btn sm" data-pinx>Batal</button><button class="btn sm pri" id="pin-ok">Simpan</button></div>');
+  $('pin-ok').onclick=async()=>{ const o=$('pc-old').value.trim(), n=$('pc-new').value.trim(), n2=$('pc-new2').value.trim(), er=$('pin-err');
+    if(!/^\d{6}$/.test(o)||!/^\d{6}$/.test(n)){ er.textContent='PIN harus 6 digit angka.'; return; } if(n!==n2){ er.textContent='PIN baru dan ulangannya tidak sama.'; return; }
+    $('pin-ok').disabled=true; const { data, error } = await SB.rpc('sp_pin_change',{p_old:o,p_new:n}); $('pin-ok').disabled=false;
+    if(error||!data){ er.textContent='Gagal menghubungi server.'; return; } if(!data.ok){ er.textContent=pinErr(data); return; }
+    er.style.color='#0e6b49'; er.textContent='PIN berhasil diganti.'; setTimeout(pinClose,900); };
+}
+async function pinAdmin(msg){
+  pinOv('<h3>Atur PIN tim</h3><p class="note">Memuat…</p>'); const { data } = await SB.rpc('sp_pin_admin_list');
+  if(!data||!data.ok){ pinOv('<h3>Atur PIN tim</h3><p class="note">Gagal memuat daftar.</p><div class="pinbt"><button class="btn sm" data-pinx>Tutup</button></div>'); return; }
+  pinOv('<h3>Atur PIN tim</h3><p class="note">Isi PIN 6 digit lalu Simpan. Salah 5 kali = terkunci 5 menit; menyimpan PIN baru membuka kunci. TL bisa mengganti PIN sendiri lewat "Ganti PIN saya".</p><div class="pinls">'+data.rows.map(r=>'<div class="pinrow"><div><b>'+esc(r.email)+'</b><br><small>'+(r.mgr?'Manager (MOD)':'Team Leader')+' · '+(r.has_pin?'PIN sudah diatur':'<span style="color:#b4271c">Belum ada PIN</span>')+'</small></div><input type="password" inputmode="numeric" maxlength="6" placeholder="6 digit" data-em="'+esc(r.email)+'"><button class="btn sm" data-pinset="'+esc(r.email)+'">Simpan</button></div>').join('')+'</div><div class="pinerr" id="pin-err" style="'+(msg?'color:#0e6b49':'')+'">'+esc(msg||'')+'</div><div class="pinbt"><button class="btn sm" data-pinx>Tutup</button></div>');
+}
+document.addEventListener('click',async ev=>{ const t=ev.target; if(!t||!t.closest) return;
+  if(t.closest('#pin-chg')) return pinChange(); if(t.closest('#pin-adm')) return pinAdmin();
+  const b=t.closest('[data-pinset]'); if(!b) return; const em=b.dataset.pinset, inp=[...document.querySelectorAll('#pin-ov input[data-em]')].find(x=>x.dataset.em===em), v=(inp&&inp.value||'').trim();
+  if(!/^\d{6}$/.test(v)){ $('pin-err').style.color=''; $('pin-err').textContent='PIN harus 6 digit angka.'; return; }
+  b.disabled=true; const { data, error } = await SB.rpc('sp_pin_admin_set',{p_email:em,p_pin:v}); b.disabled=false;
+  if(error||!data||!data.ok){ $('pin-err').style.color=''; $('pin-err').textContent=data?pinErr(data):'Gagal menghubungi server.'; return; }
+  pinAdmin('PIN '+em+' tersimpan.'); });
 let spApprDT={};
 async function spLoadApprDate(d){
   if(TIM||!SB||!d) return;
@@ -730,11 +768,18 @@ function spList(all0,last,noFetch){
   const ab=(k,id,ap,on)=>{ const ok=!!ap[k+'_ok'], w=who(ap,k);
     if(on) return '<td class="c"><input type="checkbox" class="spc" data-k="'+k+'" data-d="'+ld+'" data-id="'+esc(id)+'"'+(ok?' checked':'')+' title="'+esc(w||'Klik untuk menyetujui')+'" aria-label="Approval '+k.toUpperCase()+' '+esc(id)+'"></td>';
     return '<td class="c" title="'+esc(w)+'">'+(ok?'<span class="spg">✓</span>':'–')+'</td>'; };
+  const PINM=typeof SB!=='undefined'&&!!SB&&!noAp;
+  const nm=x=>String(x||'?').split('@')[0], tm=t=>t?new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  const pb=(k,id,ap,can)=>{ const ok=!!ap[k+'_ok'], lbl=ok?'<span class="spg">✓</span> <small>'+esc(nm(ap[k+'_by']))+' · '+esc(tm(ap[k+'_at']))+'</small>':'–';
+    if(k==='mod'&&!ap.tl_ok&&!ok) return '<td class="c">–</td>';
+    if(!can||(k==='tl'&&ok&&ap.mod_ok)) return '<td class="c">'+lbl+'</td>';
+    const at='class="spap" data-k="'+k+'" data-id="'+esc(id)+'" data-d="'+ld+'"';
+    return ok?'<td class="c">'+lbl+' <button '+at+' data-on="0" title="Batalkan approval">Batal</button></td>':'<td class="c"><button '+at+' data-on="1">Approve '+k.toUpperCase()+'</button></td>'; };
   const L=all0.filter(e=>(!spZ||e.zona===spZ)&&(!spShift.length||spShift.includes(e.c[i])));
   let tb=0,ta=0,nTl=0,nMod=0,rows='';
   L.forEach(e0=>{ const e=SCHM[e0.id]||e0, c=e.c[i], w=isWork(c), b=w?(e.tpe||0):0, q=idx[e.id], a=q?(+q.sales||0):0, pp=(w&&b>0&&dd)?a/b*100:null, ap=(spAppr[e.id]||{})[ld]||{};
     tb+=b; ta+=a; if(ap.tl_ok) nTl++; if(ap.mod_ok) nMod++;
-    rows+='<tr class="'+(!w?'off':'')+(e.id===spSel?' cur':'')+'"><td><b>'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id.replace(/^S\d+-0*/,''))+'</span></td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td>'+(dd?nn(a):'')+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td>'+(noAp?'':ab('tl',e.id,ap,canAp&&!spMgr)+ab('mod',e.id,ap,canAp&&spMgr))+'</tr>'; });
+    rows+='<tr class="'+(!w?'off':'')+(e.id===spSel?' cur':'')+'"><td><b>'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id.replace(/^S\d+-0*/,''))+'</span></td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td>'+(dd?nn(a):'')+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td>'+(noAp?'':(PINM?pb('tl',e.id,ap,canAp&&!spMgr)+pb('mod',e.id,ap,canAp&&spMgr):ab('tl',e.id,ap,canAp&&!spMgr)+ab('mod',e.id,ap,canAp&&spMgr&&(ap.tl_ok||ap.mod_ok))))+'</tr>'; });
   rows+='<tr class="tt"><td>TOTAL ('+L.length+' salesperson)</td><td></td><td>'+nn(tb)+'</td><td>'+(dd?nn(ta):'')+'</td><td>'+(dd&&tb>0?pc(ta/tb*100):'')+'</td>'+(noAp?'':'<td class="c">'+nTl+'/'+L.length+'</td><td class="c">'+nMod+'/'+L.length+'</td>')+'</tr>';
   box.innerHTML='<div class="spv"><b>Validasi harian per salesperson</b> <span class="note">Tanggal '+esc(fd(ld,{weekday:'short',day:'numeric',month:'short',year:'numeric'}))+(dd?'':' · belum ada data penjualan')+' · ubah lewat filter tanggal</span>'+
     '<div class="spw"><table><thead><tr><th>Salesperson</th><th>Shift</th><th>Budget</th><th>Actual</th><th>%</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+(L.length?rows:'<tr><td colspan="7" class="note">Tidak ada salesperson untuk filter ini.</td></tr>')+'</tbody></table></div></div>';
