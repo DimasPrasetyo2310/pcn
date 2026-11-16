@@ -184,7 +184,7 @@ function renderApprover(){
     else if(!has) btn='<button class="btn" disabled>Belum ada PIN '+k.toUpperCase()+'</button>';
     else if(k==='mod'&&!ap.tl) btn='<button class="btn" disabled>Approve MOD (menunggu TL)</button>';
     else btn='<button class="btn" data-ap="1" data-k="'+k+'">Approve '+k.toUpperCase()+'</button>';
-    return '<div><small>Approval '+(k==='tl'?'TL':'MOD')+'</small><b>'+st+'</b>'+btn+'</div>'; };
+    return '<div class="'+(ok?'apok':'apno')+'"><small>Approval '+(k==='tl'?'TL':'MOD')+'</small><b>'+st+'</b>'+btn+'</div>'; };
   $('ap-grid').innerHTML=col('tl')+col('mod');
   card.hidden=false;
 }
