@@ -34,3 +34,5 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 -- Migrasi 'sp_appr_roles': tabel sp_appr_managers (email, jabatan) = Store Manager / Asst Manager.
 -- Approval MOD hanya bisa diubah akun di tabel ini; Approval TL hanya bisa diubah editor/admin yang BUKAN di tabel ini.
 -- Tambah/hapus manager: insert into sp_appr_managers(email, jabatan) values ('x@mitra10.com','Asst Manager');
+
+-- migration sp_view_pb_cats: sp_view_data per hari juga mengembalikan pb (penjualan Master Type Private Brand) dan cats (penjualan per category).

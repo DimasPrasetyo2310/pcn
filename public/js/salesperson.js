@@ -38,15 +38,18 @@ function render(r){
   $('v-cat').textContent=p.cat||'–';
   $('v-brand').textContent=p.brand||'–';
 
-  const BR=String(p.brand||'').trim().toUpperCase();
-  const dm=x=>{ // pecah penjualan harian: master brand vs non master brand, proteksi (qty BCA)
-    const it=x&&x.it||[]; let mb=0,non=0,bca=0;
-    it.forEach(e=>{const v=Number(e[5])||0,m=String(e[1]||'').trim().toUpperCase(); if(m==='BCA')bca+=Number(e[4])||0; if(BR&&m===BR)mb+=v; else non+=v;});
-    return {has:it.length>0,mb,non,bca};
+  const BR=String(p.brand||'').trim().toUpperCase(), isPB=BR==='PRIVATE BRAND', CAT=String(p.cat||'').trim().toUpperCase();
+  const catOf=x=>{ const c=(x&&x.cats)||{}; let v=0; Object.keys(c).forEach(k=>{ if(String(k).trim().toUpperCase()===CAT) v+=Number(c[k])||0; }); return v; };
+  const dm=x=>{ // proteksi (qty BCA) dan penjualan master brand per hari
+    const it=x&&x.it||[]; let mb=0,bca=0;
+    it.forEach(e=>{const m=String(e[1]||'').trim().toUpperCase(); if(m==='BCA')bca+=Number(e[4])||0; if(!isPB&&BR&&m===BR)mb+=Number(e[5])||0;});
+    if(isPB) mb=Number(x&&x.pb)||0;
+    return {mb,bca,cat:catOf(x)};
   };
   const byD={},apr={};(r.sales||[]).forEach(x=>{byD[x.d]=x});(r.appr||[]).forEach(x=>{apr[x.d]=x});
   const ck=(on,at)=>on?'<span class="ok" title="'+esc(at?fdl(String(at).slice(0,10)):'Disetujui')+'">✓</span>':'<span class="na">–</span>';
-  let mB=0,mA=0,mMB=0,mNon=0,tInv=0,tBca=0,monthB=0,rows='';
+  // Penjualan pada hari non-shift (OFF, CT, RO, dll) tetap dihitung; budget hanya pada hari kerja (S, P, M)
+  let mB=0,mA=0,mMB=0,mCat=0,tInv=0,tBca=0,monthB=0,rows='';
   dates.forEach((d,i)=>{
     const c=p.c?p.c[i]:'';
     const w=isWork(c);
@@ -54,17 +57,35 @@ function render(r){
     const b=w?tpe:0;
     const x=byD[d]||{},a=sales[d]||0,m=dm(x),inv=Number(x.r)||0;
     if(w) monthB+=b;
-    if(!fut){ tInv+=inv; tBca+=m.bca; if(w){mB+=b;mA+=a;mMB+=m.mb;mNon+=m.non;} }
+    if(!fut){ tInv+=inv; tBca+=m.bca; mA+=a; mMB+=m.mb; mCat+=m.cat; if(w) mB+=b; }
     const pp=(w&&b>0&&!fut)?a/b*100:null;
     const today=last&&d===last;
-    const cell=(v,mode)=>fut?'<td></td>':(m.has?'<td'+(v?' class="clk" data-d="'+d+'" data-m="'+mode+'" title="Lihat item"':'')+(v?'>':'>')+rp(v)+'</td>':'<td>'+(a?'–':'0')+'</td>');
     const ap=apr[d]||{};
-    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td>'+cell(m.mb,'mb')+cell(m.non,'non')+'<td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td><td>'+(fut?'':inv)+'</td><td>'+(fut?'':m.bca)+'</td><td class="c">'+(fut?'':ck(ap.tl,ap.tl_at))+'</td><td class="c">'+(fut?'':ck(ap.mod,ap.mod_at))+'</td></tr>';
+    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td><td'+(fut||!a?'':' class="clk" data-d="'+d+'" title="Lihat item"')+'>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td><td>'+(fut?'':inv)+'</td><td>'+(fut?'':m.bca)+'</td><td class="c">'+(fut?'':ck(ap.tl,ap.tl_at))+'</td><td class="c">'+(fut?'':ck(ap.mod,ap.mod_at))+'</td></tr>';
   });
   const mp=mB>0?mA/mB*100:null;
-  rows+='<tr class="tot"><td>TOTAL s.d. '+(last?esc(fdl(last)):'-')+'</td><td class="c"></td><td>'+rp(mB)+'</td><td>'+rp(mMB)+'</td><td>'+rp(mNon)+'</td><td class="'+cls(mp)+'">'+pct(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td><td></td><td></td></tr>';
+  rows+='<tr class="tot"><td>TOTAL s.d. '+(last?esc(fdl(last)):'-')+'</td><td class="c"></td><td>'+rp(mB)+'</td><td>'+rp(mA)+'</td><td class="'+cls(mp)+'">'+pct(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td><td></td><td></td></tr>';
   $('t-body').innerHTML=rows;
   $('t-sub').textContent='Target satu bulan penuh: Rp '+rp(monthB)+' · Master brand: '+(p.brand||'–')+' · Data terakhir: '+(last?fdl(last):'belum ada');
+
+  // Kartu total penjualan master brand vs non master brand
+  const nonv=Math.max(0,mA-mMB), sh=v=>mA>0?pct(v/mA*100):'–';
+  $('mb-sub').textContent=(last?'1 s.d. '+fdl(last):'Belum ada data')+' · semua hari ber-penjualan dihitung, termasuk OFF/CT/RO · tanpa PPN'+(isPB?' · Private Brand dihitung dari Master type brand':'');
+  $('mb-l1').textContent=isPB?'Private Brand (Master type)':'Master brand '+(p.brand||'');
+  $('mb-v1').textContent='Rp '+rp(mMB); $('mb-p1').textContent=sh(mMB)+' dari total';
+  $('mb-l2').textContent=isPB?'Non Private Brand':'Non master brand';
+  $('mb-v2').textContent='Rp '+rp(nonv); $('mb-p2').textContent=sh(nonv)+' dari total';
+  $('mb-v3').textContent='Rp '+rp(mA); $('mb-p3').textContent=mp==null?'':'Pencapaian '+pct(mp)+' dari budget';
+  const cmp=$('mb-cmp');
+  if(isPB){
+    const pc2=mCat>0?mMB/mCat*100:null, w1=mCat>0?Math.min(100,mMB/mCat*100):0;
+    cmp.hidden=false;
+    cmp.innerHTML='<h3>Perbandingan Private Brand dengan Category '+esc(tc(p.cat||'–'))+'</h3>'+
+      '<div class="cmp"><div class="cr"><span>Private Brand (Master type)</span><b>Rp '+rp(mMB)+'</b></div>'+
+      '<div class="cbar"><i style="width:'+w1+'%"></i></div>'+
+      '<div class="cr"><span>Total category '+esc(tc(p.cat||'–'))+'</span><b>Rp '+rp(mCat)+'</b></div>'+
+      '<p class="note" style="margin:6px 0 0">Private Brand = <b>'+(pc2==null?'–':pct(pc2))+'</b> dari penjualan category. Non Private Brand di category ini: Rp '+rp(Math.max(0,mCat-mMB))+'. Penjualan di luar category: Rp '+rp(Math.max(0,mA-mCat))+'.</p></div>';
+  } else { cmp.hidden=true; cmp.innerHTML=''; }
 
   // Daily
   const li=last?dates.indexOf(last):-1;
@@ -76,7 +97,7 @@ function render(r){
   $('s-dp').className='big clk '+cls(dp);
   $('s-db').style.width=Math.min(100,Math.max(0,dp||0))+'%';
   $('s-db').className=cls(dp);
-  $('s-dn').textContent=last?(lw?('Actual Rp '+rp(da)+' dari budget Rp '+rp(tpe)):'Hari ini libur/cuti, tidak ada budget'):'';
+  $('s-dn').textContent=last?(lw?('Actual Rp '+rp(da)+' dari budget Rp '+rp(tpe)):'Hari non-shift (OFF/CT/RO dll), tidak ada budget · penjualan Rp '+rp(da)+' tetap dihitung di MTD'):'';
   // MTD
   $('s-md').textContent=last?('1 s.d. '+fdl(last)):'Belum ada data';
   $('s-mp').textContent=pct(mp);
@@ -91,19 +112,19 @@ function render(r){
 }
 
 
-function itemsFor(dts,mode){
-  const set=new Set(dts),m={},BR=String(RD.p.brand||'').trim().toUpperCase();
-  (RD.sales||[]).forEach(x=>{ if(!set.has(x.d)) return; (x.it||[]).forEach(e=>{ const isMb=BR&&String(e[1]||'').trim().toUpperCase()===BR; if(mode==='mb'&&!isMb) return; if(mode==='non'&&isMb) return; const k=e[2]||e[3];const t=m[k]||(m[k]=[e[0],e[1],e[2],e[3],0,0]);t[4]+=Number(e[4])||0;t[5]+=Number(e[5])||0}); });
+function itemsFor(dts){
+  const set=new Set(dts),m={};
+  (RD.sales||[]).forEach(x=>{ if(!set.has(x.d)) return; (x.it||[]).forEach(e=>{ const k=e[2]||e[3];const t=m[k]||(m[k]=[e[0],e[1],e[2],e[3],0,0]);t[4]+=Number(e[4])||0;t[5]+=Number(e[5])||0}); });
   return Object.values(m).sort((a,b)=>b[5]-a[5]);
 }
 const tc=s=>String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
-function openPop(title,per,dts,mode){
-  const it=itemsFor(dts,mode),tq=it.reduce((s,e)=>s+e[4],0),ts=it.reduce((s,e)=>s+e[5],0);
+function openPop(title,per,dts){
+  const it=itemsFor(dts),tq=it.reduce((s,e)=>s+e[4],0),ts=it.reduce((s,e)=>s+e[5],0);
   $('pop-t').textContent=title;$('pop-per').textContent=per+' · penjualan tanpa PPN';
-  $('pop-body').innerHTML=it.length?'<table><thead><tr><th class="l">Category</th><th class="l">Master brand</th><th class="l">No Item</th><th class="l">Description</th><th>Qty</th><th>Value (Rp)</th></tr></thead><tbody>'+it.map(e=>'<tr><td class="l">'+esc(tc(e[0]))+'</td><td class="l">'+esc(tc(e[1]))+'</td><td class="l">'+esc(e[2])+'</td><td class="w">'+esc(e[3])+'</td><td>'+rp(e[4])+'</td><td>'+rp(e[5])+'</td></tr>').join('')+'<tr class="tot"><td class="l" colspan="4">TOTAL ('+it.length+' item)</td><td>'+rp(tq)+'</td><td>'+rp(ts)+'</td></tr></tbody></table>':'<p class="note" style="padding:16px">Belum ada rincian item untuk periode ini.</p>';
+  $('pop-body').innerHTML=it.length?'<table><thead><tr><th class="l">Category</th><th class="l">No Item</th><th class="l">Description</th><th>Qty</th><th>Value (Rp)</th></tr></thead><tbody>'+it.map(e=>'<tr><td class="l">'+esc(tc(e[0]))+'</td><td class="l">'+esc(e[2])+'</td><td class="w">'+esc(e[3])+'</td><td>'+rp(e[4])+'</td><td>'+rp(e[5])+'</td></tr>').join('')+'<tr class="tot"><td class="l" colspan="3">TOTAL ('+it.length+' item)</td><td>'+rp(tq)+'</td><td>'+rp(ts)+'</td></tr></tbody></table>':'<p class="note" style="padding:16px">Belum ada rincian item untuk periode ini.</p>';
   $('pop').hidden=false;$('pop-body').scrollTop=0;$('pop-x').focus();
 }
-function workDates(upTo){ const p=RD.p; return (RD.dates||[]).filter((d,i)=>d<=upTo&&isWork(p.c[i])); }
+function allDates(upTo){ return (RD.dates||[]).filter(d=>d<=upTo); }
 function closePop(){$('pop').hidden=true}
 async function load(code,fromForm){
   const btn=$('go');
@@ -125,6 +146,7 @@ async function load(code,fromForm){
     clearInterval(timer);
     timer=setInterval(()=>{if(!document.hidden)load(CODE,false)},30000);
   }catch(e){
+    try{console.error('sp',e)}catch(_){}
     if(fromForm||$('login').hidden){showLogin();showErr('Gagal terhubung. Periksa internet Anda lalu coba lagi.')}
   }finally{
     btn.disabled=false;btn.textContent='Lihat pencapaian';
@@ -149,8 +171,8 @@ function init(){
   $('pop').addEventListener('click',e=>{if(e.target===$('pop'))closePop()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop()});
   $('s-dp').addEventListener('click',()=>{if(RD&&RD.last)openPop('Item terjual · Daily',fdl(RD.last),[RD.last])});
-  $('s-mp').addEventListener('click',()=>{if(RD&&RD.last)openPop('Item terjual · MTD','1 s.d. '+fdl(RD.last)+' (hari kerja)',workDates(RD.last))});
-  $('t-body').addEventListener('click',e=>{const c=e.target.closest('td[data-d]');if(c)openPop((c.dataset.m==='mb'?'Master brand · ':'Non master brand · ')+fd(c.dataset.d),fdl(c.dataset.d),[c.dataset.d],c.dataset.m)});
+  $('s-mp').addEventListener('click',()=>{if(RD&&RD.last)openPop('Item terjual · MTD','1 s.d. '+fdl(RD.last),allDates(RD.last))});
+  $('t-body').addEventListener('click',e=>{const c=e.target.closest('td[data-d]');if(c)openPop('Item terjual · '+fd(c.dataset.d),fdl(c.dataset.d),[c.dataset.d])});
   $('switch').addEventListener('click',()=>{try{sessionStorage.removeItem(SKEY)}catch(e){}CODE='';$('code').value='';showErr('');showLogin()});
   $('reload').addEventListener('click',()=>load(CODE,false));
   document.addEventListener('visibilitychange',()=>{if(!document.hidden&&CODE&&!$('view').hidden)load(CODE,false)});
