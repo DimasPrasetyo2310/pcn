@@ -669,7 +669,7 @@ function renderTopBrand(){
 }
 
 /* Tampilan salesperson (validasi TL): sama dengan halaman link kode salesperson */
-let spSel='', spAppr={}, spApprT={}, spMgr=false, spJab='';
+let spSel='', spZ='', spShift='', spDate='', spAppr={}, spApprT={}, spMgr=false, spJab='';
 async function spLoadRole(email){
   if(!SB||!email) return;
   const { data } = await SB.from('sp_appr_managers').select('email,jabatan');
@@ -709,9 +709,19 @@ document.addEventListener('click',ev=>{ const c=ev.target.closest&&ev.target.clo
 document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-body .bg[data-spd]')) spOpen(ev.target.dataset.spd); });
 function renderSP(noFetch){
   const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
-  const ppl=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
-  if(!ppl.length){ sel.innerHTML=''; box.innerHTML='<p class="note">Unggah file jadwal &amp; target untuk menampilkan tampilan ini.</p>'; return; }
+  const all0=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
+  if(!all0.length){ sel.innerHTML=''; box.innerHTML='<p class="note">Unggah file jadwal &amp; target untuk menampilkan tampilan ini.</p>'; return; }
+  const zs=[...new Set(all0.map(e=>e.zona))].sort((a,b)=>String(a).localeCompare(String(b),'id',{numeric:true}));
+  if(spZ&&!zs.includes(spZ)) spZ='';
+  const ppl=all0.filter(e=>!spZ||e.zona===spZ);
   if(!ppl.some(e=>e.id===spSel)) spSel=ppl[0].id;
+  const shs=[...new Set(all0.flatMap(e=>e.c||[]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'id'));
+  if(spShift&&!shs.includes(spShift)) spShift='';
+  if(spDate&&!SCH.dates.includes(spDate)) spDate='';
+  const op=(v,t,cur)=>'<option value="'+esc(v)+'"'+(String(v)===String(cur)?' selected':'')+'>'+esc(t)+'</option>';
+  $('sp-zona').innerHTML=op('','Semua zonasi',spZ)+zs.map(z=>op(z,z,spZ)).join('');
+  $('sp-shift').innerHTML=op('','Semua shift',spShift)+shs.map(c=>op(c,c,spShift)).join('');
+  $('sp-date').innerHTML=op('','Semua tanggal',spDate)+SCH.dates.map(d=>op(d,fd(d,{weekday:'short',day:'numeric',month:'short'}),spDate)).join('');
   sel.innerHTML=ppl.map(e=>'<option value="'+esc(e.id)+'"'+(e.id===spSel?' selected':'')+'>'+esc((e.name||e.id)+' · '+e.id.replace(/^S\d+-0*/,''))+'</option>').join('');
   if(!noFetch) spLoadAppr();
   const nn=v=>fmtN.format(Math.round(v)); const e=SCHM[spSel], last=dates[dates.length-1]||'';
@@ -728,6 +738,7 @@ function renderSP(noFetch){
   let mB=0,mA=0,mMB=0,mNon=0,tInv=0,tBca=0,monthB=0,rows='';
   SCH.dates.forEach((d,i)=>{ const c=e.c[i], w=isWork(c), fut=!last||d>last, b=w?e.tpe:0, a=sales[d]||0, m=dq(d);
     if(w) monthB+=b; if(!fut){ tInv+=m.inv; tBca+=m.bca; if(w){ mB+=b; mA+=a; mMB+=m.mb; mNon+=m.non; } }
+    if((spShift&&c!==spShift)||(spDate&&d!==spDate)) return;
     const pp=(w&&b>0&&!fut)?a/b*100:null;
     const cell=(v,k)=>fut?'<td></td>':(m.has?'<td'+(v?' class="spk" data-spd="'+d+'|'+k+'" title="Lihat item"':'')+'>'+nn(v)+'</td>':'<td>'+(a?'–':'0')+'</td>');
     const ap=apr[d]||{};
@@ -739,9 +750,9 @@ function renderSP(noFetch){
     '<div class="spi"><div><small>Zonasi</small><b>'+esc(e.zona||'–')+'</b></div><div><small>Category</small><b>'+esc(e.cat||'–')+'</b></div><div><small>Master brand</small><b>'+esc(e.brand||'–')+'</b></div></div>'+
     '<div class="sps"><div><small>Achievement Daily</small><div class="note">'+(last?esc(fd(last,{weekday:'short',day:'numeric',month:'short'})):'Belum ada data')+'</div><div class="bg spk '+cls(dp)+'" data-spd="D" tabindex="0" role="button">'+pc(dp)+'</div><div class="note">'+(lw?'Actual Rp '+nn(da)+' dari budget Rp '+nn(e.tpe):'Libur/cuti, tidak ada budget')+'</div></div>'+
     '<div><small>Achievement MTD</small><div class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short',year:'numeric'})):'Belum ada data')+'</div><div class="bg spk '+cls(mp)+'" data-spd="M" tabindex="0" role="button">'+pc(mp)+'</div><div class="note">Actual Rp '+nn(mA)+' dari budget Rp '+nn(mB)+'</div></div></div>'+
-    '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Master brand</th><th>Non master brand</th><th>%</th><th>Invoice</th><th>Proteksi Qty</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" id="sp-msg">'+(noAp?'':(canAp?(spMgr?'Anda ('+spJab+') dapat mencentang Approval MOD. Approval TL diisi oleh Team Leader.':'Anda (Team Leader) dapat mencentang Approval TL. Approval MOD diisi oleh Store Manager / Asst Manager.')+' Centang lagi untuk membatalkan.':'Peran Anda hanya bisa melihat approval.'))+' % = (Master brand + Non master brand) ÷ Budget. Proteksi Qty = qty master brand BCA.</p></div>';
+    '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Master brand</th><th>Non master brand</th><th>%</th><th>Invoice</th><th>Proteksi Qty</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" id="sp-msg">'+(noAp?'':(canAp?(spMgr?'Anda ('+spJab+') dapat mencentang Approval MOD. Approval TL diisi oleh Team Leader.':'Anda (Team Leader) dapat mencentang Approval TL. Approval MOD diisi oleh Store Manager / Asst Manager.')+' Centang lagi untuk membatalkan.':'Peran Anda hanya bisa melihat approval.'))+(spShift||spDate?' Tabel disaring ('+[spShift?'shift '+spShift:'',spDate?fd(spDate,{day:"numeric",month:"short"}):''].filter(Boolean).join(', ')+'); baris TOTAL tetap MTD seluruh bulan.':'')+' % = (Master brand + Non master brand) ÷ Budget. Proteksi Qty = qty master brand BCA.</p></div>';
 }
-document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='sp-sel'){ spSel=ev.target.value; renderSP(); } });
+document.addEventListener('change',ev=>{ const id=ev.target&&ev.target.id; if(id==='sp-sel'){ spSel=ev.target.value; renderSP(); } else if(id==='sp-zona'){ spZ=ev.target.value; renderSP(); } else if(id==='sp-shift'){ spShift=ev.target.value; renderSP(true); } else if(id==='sp-date'){ spDate=ev.target.value; renderSP(true); } });
 function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));
