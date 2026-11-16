@@ -687,9 +687,17 @@ async function spLoadAppr(){
   if(error){ spApprT[id]=0; return; }
   const o={}; (data||[]).forEach(r=>{ o[r.sale_date]=r; }); spAppr[id]=o; if(id===spSel) renderSP(true);
 }
+let spApprDT={};
+async function spLoadApprDate(d){
+  if(TIM||!SB||!d) return;
+  if(spApprDT[d]&&Date.now()-spApprDT[d]<15000) return; spApprDT[d]=Date.now();
+  const { data, error } = await SB.from('sp_approvals').select('sales_id,sale_date,tl_ok,tl_by,tl_at,mod_ok,mod_by,mod_at').eq('store_code',D.code).eq('sale_date',d);
+  if(error){ spApprDT[d]=0; return; }
+  (data||[]).forEach(r=>{ (spAppr[r.sales_id]||(spAppr[r.sales_id]={}))[r.sale_date]=r; }); renderSP(true);
+}
 document.addEventListener('change',async ev=>{
   const c=ev.target; if(!c||!c.classList||!c.classList.contains('spc')) return;
-  const k=c.dataset.k, d=c.dataset.d, id=spSel, msg=$('sp-msg'); c.disabled=true;
+  const k=c.dataset.k, d=c.dataset.d, id=c.dataset.id||spSel, msg=$('sp-msg'); c.disabled=true;
   const row={store_code:D.code, sales_id:id, sale_date:d}; row[k+'_ok']=c.checked;
   const { data, error } = await SB.from('sp_approvals').upsert(row,{onConflict:'store_code,sales_id,sale_date'}).select('sale_date,tl_ok,tl_by,tl_at,mod_ok,mod_by,mod_at').single();
   if(error){ c.checked=!c.checked; c.disabled=false; if(msg) msg.textContent='Gagal menyimpan approval: '+((/row-level|permission/i.test(error.message||''))?'akun Anda tidak punya izin (hanya editor/admin).':(error.message||'error')); return; }
@@ -710,6 +718,27 @@ function spOpen(k){
 }
 document.addEventListener('click',ev=>{ const c=ev.target.closest&&ev.target.closest('#sp-body [data-spd]'); if(!c) return; spOpen(c.dataset.spd); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-body [data-spd][role=button]')) spOpen(ev.target.dataset.spd); });
+function spList(all0,last,noFetch){
+  const box=$('sp-list'); if(!box) return;
+  const ld=(spDate&&SCH.dates.includes(spDate))?spDate:last; if(!ld){ box.innerHTML=''; return; }
+  if(!noFetch) spLoadApprDate(ld);
+  const i=SCH.dates.indexOf(ld), dd=days[ld], idx={}; if(dd) (dd.people||[]).forEach(q=>{ idx[q.id]=q; });
+  const noAp=!!TIM; const canAp=canWrite===true&&!noAp;
+  const nn=v=>fmtN.format(Math.round(v)), cls=p=>p==null?'spn':p>=100?'spg':p>=75?'spa':'spb', pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
+  const who=(ap,k)=>{ if(!ap[k+'_ok']) return ''; const t=ap[k+'_at']?new Date(ap[k+'_at']).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''; return 'Disetujui oleh '+(ap[k+'_by']||'?')+(t?' · '+t:''); };
+  const ab=(k,id,ap,on)=>{ const ok=!!ap[k+'_ok'], w=who(ap,k);
+    if(on) return '<td class="c"><input type="checkbox" class="spc" data-k="'+k+'" data-d="'+ld+'" data-id="'+esc(id)+'"'+(ok?' checked':'')+' title="'+esc(w||'Klik untuk menyetujui')+'" aria-label="Approval '+k.toUpperCase()+' '+esc(id)+'"></td>';
+    return '<td class="c" title="'+esc(w)+'">'+(ok?'<span class="spg">✓</span>':'–')+'</td>'; };
+  const L=all0.filter(e=>(!spZ||e.zona===spZ)&&(!spShift.length||spShift.includes(e.c[i])));
+  let tb=0,ta=0,nTl=0,nMod=0,rows='';
+  L.forEach(e0=>{ const e=SCHM[e0.id]||e0, c=e.c[i], w=isWork(c), b=w?(e.tpe||0):0, q=idx[e.id], a=q?(+q.sales||0):0, pp=(w&&b>0&&dd)?a/b*100:null, ap=(spAppr[e.id]||{})[ld]||{};
+    tb+=b; ta+=a; if(ap.tl_ok) nTl++; if(ap.mod_ok) nMod++;
+    rows+='<tr class="'+(!w?'off':'')+(e.id===spSel?' cur':'')+'"><td><a href="#sp-body" class="splk" data-pick="'+esc(e.id)+'">'+esc(e.name||e.id)+'</a> <span class="note">'+esc(e.id.replace(/^S\d+-0*/,''))+'</span></td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td>'+(dd?nn(a):'')+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td>'+(noAp?'':ab('tl',e.id,ap,canAp&&!spMgr)+ab('mod',e.id,ap,canAp&&spMgr))+'</tr>'; });
+  rows+='<tr class="tt"><td>TOTAL ('+L.length+' salesperson)</td><td></td><td>'+nn(tb)+'</td><td>'+(dd?nn(ta):'')+'</td><td>'+(dd&&tb>0?pc(ta/tb*100):'')+'</td>'+(noAp?'':'<td class="c">'+nTl+'/'+L.length+'</td><td class="c">'+nMod+'/'+L.length+'</td>')+'</tr>';
+  box.innerHTML='<div class="spv"><b>Validasi harian per salesperson</b> <span class="note">Tanggal '+esc(fd(ld,{weekday:'short',day:'numeric',month:'short',year:'numeric'}))+(dd?'':' · belum ada data penjualan')+' · ubah lewat filter tanggal · klik nama untuk melihat detail</span>'+
+    '<div class="spw"><table><thead><tr><th>Salesperson</th><th>Shift</th><th>Budget</th><th>Actual</th><th>%</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+(L.length?rows:'<tr><td colspan="7" class="note">Tidak ada salesperson untuk filter ini.</td></tr>')+'</tbody></table></div></div>';
+}
+document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.closest('#sp-list [data-pick]'); if(!a) return; ev.preventDefault(); spSel=a.dataset.pick; renderSP(); const b=$('sp-body'); if(b&&b.scrollIntoView) b.scrollIntoView({behavior:'smooth',block:'start'}); });
 function renderSP(noFetch){
   const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
   const all0=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
@@ -729,6 +758,7 @@ function renderSP(noFetch){
   $('sp-date').innerHTML=op('','Semua tanggal',spDate)+SCH.dates.map(d=>op(d,fd(d,{weekday:'short',day:'numeric',month:'short'}),spDate)).join('');
   sel.innerHTML=ppl.map(e=>'<option value="'+esc(e.id)+'"'+(e.id===spSel?' selected':'')+'>'+esc((e.name||e.id)+' · '+e.id.replace(/^S\d+-0*/,''))+'</option>').join('');
   if(!noFetch) spLoadAppr();
+  spList(all0,dates[dates.length-1]||'',noFetch);
   const nn=v=>fmtN.format(Math.round(v)); const e=SCHM[spSel], last=dates[dates.length-1]||'';
   const cls=p=>p==null?'spn':p>=100?'spg':p>=75?'spa':'spb', pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
   const sales={}; dates.forEach(d=>{ const q=(days[d].people||[]).find(x=>x.id===spSel); sales[d]=q?(+q.sales||0):0; });
