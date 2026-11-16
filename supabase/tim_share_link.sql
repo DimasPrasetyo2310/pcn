@@ -31,3 +31,6 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 -- Migrasi 'sp_approvals': tabel sp_approvals (approval TL dan MOD per salesperson per tanggal).
 -- RLS: baca untuk semua peran login, tulis hanya editor/admin; trigger mengisi tl_by/mod_by dan waktu dari JWT.
 -- sp_view_data juga mengembalikan 'r' (jumlah invoice per hari) dan 'appr' (status approval).
+-- Migrasi 'sp_appr_roles': tabel sp_appr_managers (email, jabatan) = Store Manager / Asst Manager.
+-- Approval MOD hanya bisa diubah akun di tabel ini; Approval TL hanya bisa diubah editor/admin yang BUKAN di tabel ini.
+-- Tambah/hapus manager: insert into sp_appr_managers(email, jabatan) values ('x@mitra10.com','Asst Manager');

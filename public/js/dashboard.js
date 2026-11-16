@@ -669,7 +669,15 @@ function renderTopBrand(){
 }
 
 /* Tampilan salesperson (validasi TL): sama dengan halaman link kode salesperson */
-let spSel='', spAppr={}, spApprT={};
+let spSel='', spAppr={}, spApprT={}, spMgr=false, spJab='';
+async function spLoadRole(email){
+  if(!SB||!email) return;
+  const { data } = await SB.from('sp_appr_managers').select('email,jabatan');
+  const m=(data||[]).find(r=>String(r.email).toLowerCase()===String(email).toLowerCase());
+  spMgr=!!m; spJab=m?(m.jabatan||'Manager'):'';
+  if(m&&$('who-role')) $('who-role').textContent=spJab; else if(canWrite===true&&$('who-role')) $('who-role').textContent='Team Leader';
+  renderSP(true);
+}
 async function spLoadAppr(){
   if(TIM||!SB||!spSel) return; const id=spSel;
   if(spApprT[id]&&Date.now()-spApprT[id]<15000) return; spApprT[id]=Date.now();
@@ -723,7 +731,7 @@ function renderSP(noFetch){
     const pp=(w&&b>0&&!fut)?a/b*100:null;
     const cell=(v,k)=>fut?'<td></td>':(m.has?'<td'+(v?' class="spk" data-spd="'+d+'|'+k+'" title="Lihat item"':'')+'>'+nn(v)+'</td>':'<td>'+(a?'–':'0')+'</td>');
     const ap=apr[d]||{};
-    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td>'+cell(m.mb,'mb')+cell(m.non,'non')+'<td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td><td>'+(fut?'':m.inv)+'</td><td>'+(fut?'':m.bca)+'</td>'+(noAp?'':(fut?'<td></td><td></td>':ab('tl',d,ap,canAp)+ab('mod',d,ap,canAp)))+'</tr>'; });
+    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td>'+cell(m.mb,'mb')+cell(m.non,'non')+'<td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td><td>'+(fut?'':m.inv)+'</td><td>'+(fut?'':m.bca)+'</td>'+(noAp?'':(fut?'<td></td><td></td>':ab('tl',d,ap,canAp&&!spMgr)+ab('mod',d,ap,canAp&&spMgr)))+'</tr>'; });
   const mp=mB>0?mA/mB*100:null;
   rows+='<tr class="tt"><td>TOTAL s.d. '+esc(last?fd(last,{day:'numeric',month:'short'}):'-')+'</td><td></td><td>'+nn(mB)+'</td><td>'+nn(mMB)+'</td><td>'+nn(mNon)+'</td><td>'+pc(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td>'+(noAp?'':'<td></td><td></td>')+'</tr>';
   const li=SCH.dates.indexOf(last), lw=li>=0&&isWork(e.c[li]), da=last?(sales[last]||0):0, dp=(lw&&e.tpe>0)?da/e.tpe*100:null;
@@ -731,7 +739,7 @@ function renderSP(noFetch){
     '<div class="spi"><div><small>Zonasi</small><b>'+esc(e.zona||'–')+'</b></div><div><small>Category</small><b>'+esc(e.cat||'–')+'</b></div><div><small>Master brand</small><b>'+esc(e.brand||'–')+'</b></div></div>'+
     '<div class="sps"><div><small>Achievement Daily</small><div class="note">'+(last?esc(fd(last,{weekday:'short',day:'numeric',month:'short'})):'Belum ada data')+'</div><div class="bg spk '+cls(dp)+'" data-spd="D" tabindex="0" role="button">'+pc(dp)+'</div><div class="note">'+(lw?'Actual Rp '+nn(da)+' dari budget Rp '+nn(e.tpe):'Libur/cuti, tidak ada budget')+'</div></div>'+
     '<div><small>Achievement MTD</small><div class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short',year:'numeric'})):'Belum ada data')+'</div><div class="bg spk '+cls(mp)+'" data-spd="M" tabindex="0" role="button">'+pc(mp)+'</div><div class="note">Actual Rp '+nn(mA)+' dari budget Rp '+nn(mB)+'</div></div></div>'+
-    '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Master brand</th><th>Non master brand</th><th>%</th><th>Invoice</th><th>Proteksi Qty</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" id="sp-msg">'+(noAp?'':(canAp?'Centang kotak Approval TL / MOD untuk menyetujui; centang lagi untuk membatalkan.':'Peran Anda hanya bisa melihat approval.'))+' % = (Master brand + Non master brand) ÷ Budget. Proteksi Qty = qty master brand BCA.</p></div>';
+    '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Master brand</th><th>Non master brand</th><th>%</th><th>Invoice</th><th>Proteksi Qty</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" id="sp-msg">'+(noAp?'':(canAp?(spMgr?'Anda ('+spJab+') dapat mencentang Approval MOD. Approval TL diisi oleh Team Leader.':'Anda (Team Leader) dapat mencentang Approval TL. Approval MOD diisi oleh Store Manager / Asst Manager.')+' Centang lagi untuk membatalkan.':'Peran Anda hanya bisa melihat approval.'))+' % = (Master brand + Non master brand) ÷ Budget. Proteksi Qty = qty master brand BCA.</p></div>';
 }
 document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='sp-sel'){ spSel=ev.target.value; renderSP(); } });
 function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); renderTable(); renderLow(); renderFoot(); }
@@ -1256,7 +1264,7 @@ async function boot(){
   if(roleErr){ bootMsg('Peran akun tidak bisa dibaca: '+roleErr.message,true); return; }
   if(!roleRow){ bootMsg('Akun '+session.user.email+' belum punya peran. Hubungi admin.',true); return; }
   canWrite = roleRow.role==='admin'||roleRow.role==='editor';
-  $('who-name').textContent=session.user.email; $('who-role').textContent=ROLE_LABEL[roleRow.role]||roleRow.role; if(window.startPresence)startPresence(SB,session.user.email,ROLE_LABEL[roleRow.role]||roleRow.role,'Salesperson');
+  $('who-name').textContent=session.user.email; spLoadRole(session.user.email); $('who-role').textContent=ROLE_LABEL[roleRow.role]||roleRow.role; if(window.startPresence)startPresence(SB,session.user.email,ROLE_LABEL[roleRow.role]||roleRow.role,'Salesperson');
   bootEl.hidden=true; appEl.hidden=false; $('psdock').hidden=false;
   applyWrite();
   await loadAll();
