@@ -175,27 +175,29 @@ async function initApprover(){
     renderApprover();
   }catch(e){}
 }
+function todayWIB(){ const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return p; }
+function apDay(){ const ds=RD&&RD.dates||[], t=todayWIB(); return ds.includes(t)?t:(RD&&RD.last)||''; } // hari H
 function renderApprover(){
   const card=$('ap-card'); if(!card) return;
   if(!APR||!RD||!RD.p){ card.hidden=true; return; }
-  const dates=(RD.dates||[]).filter(d=>RD.last&&d<=RD.last), sel=$('ap-date'), prev=sel.value;
-  sel.innerHTML=dates.map(d=>'<option value="'+d+'">'+esc(fd(d))+'</option>').join('');
-  sel.value=dates.includes(prev)?prev:(RD.last||'');
-  const d=sel.value, ap=(RD.appr||[]).find(x=>x.d===d)||{};
+  const d=apDay(), ap=(RD.appr||[]).find(x=>x.d===d)||{};
   const ts=t=>{if(!t)return '';const x=new Date(t);return isNaN(x)?'':' · '+x.getDate()+' '+MON[x.getMonth()]+', '+String(x.getHours()).padStart(2,'0')+'.'+String(x.getMinutes()).padStart(2,'0')};
-  $('ap-who').textContent='Anda masuk sebagai '+APR.email+' ('+(APR.mgr?'Manager · hanya Approval MOD':'Team Leader · hanya Approval TL')+'). Pilih tanggal lalu konfirmasi dengan PIN Anda.'+(APR.hasPin?'':' PIN Anda belum diatur, minta admin mengatur PIN.');
-  $('ap-st').innerHTML='<div><b>Approval TL</b>'+(ap.tl?'✓ Disetujui'+esc(ts(ap.tl_at)):'Belum')+'</div><div><b>Approval MOD</b>'+(ap.mod?'✓ Disetujui'+esc(ts(ap.mod_at)):(ap.tl?'Belum':'Menunggu TL'))+'</div>';
-  const k=APR.mgr?'mod':'tl', ok=!!ap[k];
-  let btn='';
-  if(!d) btn='';
-  else if(!ok){ btn=(k==='mod'&&!ap.tl)?'<button class="btn" disabled>Approve MOD (menunggu TL)</button>':'<button class="btn" data-ap="1">Approve '+k.toUpperCase()+'</button>'; }
-  else if(!(k==='tl'&&ap.mod)) btn='<button class="btn ghost" data-ap="0">Batalkan Approval '+k.toUpperCase()+'</button>';
-  $('ap-btn').innerHTML=btn;
+  $('ap-who').textContent='Hari H: '+(d?fd(d):'–')+' · Anda masuk sebagai '+APR.email+' ('+(APR.mgr?'Manager, hanya bisa Approval MOD':'Team Leader, hanya bisa Approval TL')+'). Konfirmasi dengan PIN Anda.'+(APR.hasPin?'':' PIN Anda belum diatur, minta admin mengatur PIN.');
+  const col=(k)=>{ const ok=!!ap[k], mine=(k==='mod')===APR.mgr, lock=(k==='tl'&&ap.mod);
+    let st=ok?'✓ Disetujui'+esc(ts(ap[k+'_at'])):(k==='mod'&&!ap.tl?'Menunggu TL':'Belum');
+    let btn;
+    if(!d) btn='';
+    else if(ok) btn=(mine&&!lock)?'<button class="btn ghost" data-ap="0" data-k="'+k+'">Batalkan Approval '+k.toUpperCase()+'</button>':'';
+    else if(!mine) btn='<button class="btn" disabled title="Khusus '+(k==='tl'?'Team Leader':'Store Manager / Asst Manager')+'">Approve '+k.toUpperCase()+'</button>';
+    else if(k==='mod'&&!ap.tl) btn='<button class="btn" disabled>Approve MOD (menunggu TL)</button>';
+    else btn='<button class="btn" data-ap="1" data-k="'+k+'">Approve '+k.toUpperCase()+'</button>';
+    return '<div><small>Approval '+k.toUpperCase()+'</small><b>'+st+'</b>'+btn+'</div>'; };
+  $('ap-grid').innerHTML=col('tl')+col('mod');
   card.hidden=false;
 }
 function apErr(r){ const m={nopin:'PIN Anda belum diatur. Minta admin mengatur PIN.',locked:'Terlalu banyak salah. Coba lagi dalam '+(r.wait||5)+' menit.',bad:'PIN salah. Sisa percobaan: '+r.left+'.',role:'Akun Anda tidak punya izin.',role_tl:'Approval TL hanya untuk Team Leader.',role_mod:'Approval MOD hanya untuk Store Manager / Asst Manager.',need_tl:'Approval TL harus dilakukan lebih dulu.',mod_first:'Batalkan Approval MOD lebih dulu.',format:'PIN harus 6 digit angka.'}; return m[r.err]||'Gagal ('+(r.err||'error')+').'; }
-function apPin(on){
-  const d=$('ap-date').value, k=APR.mgr?'mod':'tl', m=/^S(\d+)-/.exec(RD.p.id||''); if(!d||!m) return;
+function apPin(on,k){
+  const d=apDay(), m=/^S(\d+)-/.exec(RD.p.id||''); if(!d||!m) return;
   let o=$('pin-ov'); if(!o){ o=document.createElement('div'); o.id='pin-ov'; o.className='pinov'; o.addEventListener('click',e=>{ if(e.target===o||(e.target.closest&&e.target.closest('[data-pinx]'))) o.hidden=true; }); document.body.appendChild(o); }
   o.innerHTML='<div class="pinbox" role="dialog" aria-modal="true"><h3>'+(on?'Approve ':'Batalkan ')+k.toUpperCase()+'</h3><p class="note">'+esc(RD.p.name||RD.p.id)+' · '+esc(fd(d))+'</p><input id="pin-in" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" data-lpignore="true" name="pin-'+Math.random().toString(36).slice(2,7)+'" placeholder="PIN 6 digit"><div class="pinerr" id="pin-err"></div><div class="pinbt"><button class="btn ghost" data-pinx type="button">Batal</button><button class="btn" id="pin-ok" type="button">Konfirmasi</button></div></div>';
   o.hidden=false; const inp=$('pin-in'); inp.focus(); inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/\D/g,'').slice(0,6); });
@@ -223,8 +225,7 @@ function init(){
     load(v,true);
   });
   initApprover();
-  $('ap-date').addEventListener('change',()=>{ $('ap-msg').textContent=''; renderApprover(); });
-  $('ap-btn').addEventListener('click',e=>{ const b=e.target.closest('button[data-ap]'); if(b) apPin(b.dataset.ap==='1'); });
+  $('ap-grid').addEventListener('click',e=>{ const b=e.target.closest('button[data-ap]'); if(b&&!b.disabled) apPin(b.dataset.ap==='1',b.dataset.k); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const o=$('pin-ov'); if(o) o.hidden=true; } });
   $('pop-x').addEventListener('click',closePop);
   $('pop').addEventListener('click',e=>{if(e.target===$('pop'))closePop()});
