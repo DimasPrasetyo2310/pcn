@@ -41,3 +41,6 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 
 -- migration sp_pin_approval: tabel sp_pins (hash PIN bcrypt, tanpa akses langsung), fungsi sp_pin_status, sp_pin_admin_list, sp_pin_admin_set (admin), sp_pin_change (ganti PIN sendiri), sp_approve (approval TL/MOD dengan PIN 6 digit; salah 5x = kunci 5 menit; MOD hanya setelah TL; batal TL ditolak bila MOD sudah approve).
 -- Policy insert/update langsung pada sp_approvals dihapus: approval hanya lewat sp_approve.
+
+-- migration sp_pin_anon_approval: sp_approvers(p_key) dan sp_approve_anon(p_key,p_code,p_kind,p_approver,p_pin,p_on) untuk approval di HP salesperson (pilih nama + PIN, tanggal = hari H WIB); trigger sp_appr_stamp membaca app.approver.
+-- migration sp_view_appr_by: sp_view_data.appr memuat tl_by/mod_by (nama) dan field today.

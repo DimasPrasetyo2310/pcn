@@ -2,8 +2,7 @@
 'use strict';
 const CFG=window.APP_CONFIG||{};
 const SB=(window.supabase&&CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&!/YOUR-/.test(CFG.SUPABASE_URL))?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):null;
-const SBA=(window.supabase&&CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&!/YOUR-/.test(CFG.SUPABASE_URL))?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:false}}):null;
-let APR=null; // info pemberi approval (hanya bila TL/MOD sedang login di dashboard pada browser yang sama)
+let APR=null; // daftar approver (nama) untuk dropdown PIN
 const KEY=(new URLSearchParams(location.search).get('k')||'').trim();
 const $=id=>document.getElementById(id);
 const isWork=c=>/^[SPM](?:[\/.].*)?$/.test(String(c||''));
@@ -165,49 +164,43 @@ async function load(code,fromForm){
 }
 
 
-// ---- Validasi TL/MOD (muncul hanya bila TL/MOD sedang login di dashboard pada browser ini) ----
+// ---- Validasi TL/MOD: TL/MOD memilih nama dan memasukkan PIN di HP salesperson ----
 async function initApprover(){
-  if(!SBA||APR) return;
-  try{
-    const {data:{session}}=await SBA.auth.getSession(); if(!session) return;
-    const {data:st}=await SBA.rpc('sp_pin_status'); if(!st||!(st.role==='editor'||st.role==='admin')) return;
-    APR={email:session.user.email,mgr:!!st.is_mgr,hasPin:!!st.has_pin};
-    renderApprover();
-  }catch(e){}
+  if(!SB||APR) return;
+  try{ const {data}=await SB.rpc('sp_approvers',{p_key:KEY}); if(data&&data.ok){ APR={tl:data.tl||[],mod:data.mod||[]}; renderApprover(); } }catch(e){}
 }
-function todayWIB(){ const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); return p; }
-function apDay(){ const ds=RD&&RD.dates||[], t=todayWIB(); return ds.includes(t)?t:(RD&&RD.last)||''; } // hari H
+function todayWIB(){ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
+function apDay(){ return (RD&&RD.today)||todayWIB(); } // hari H
 function renderApprover(){
   const card=$('ap-card'); if(!card) return;
   if(!APR||!RD||!RD.p){ card.hidden=true; return; }
   const d=apDay(), ap=(RD.appr||[]).find(x=>x.d===d)||{};
   const ts=t=>{if(!t)return '';const x=new Date(t);return isNaN(x)?'':' · '+x.getDate()+' '+MON[x.getMonth()]+', '+String(x.getHours()).padStart(2,'0')+'.'+String(x.getMinutes()).padStart(2,'0')};
-  $('ap-who').textContent='Hari H: '+(d?fd(d):'–')+' · Anda masuk sebagai '+APR.email+' ('+(APR.mgr?'Manager, hanya bisa Approval MOD':'Team Leader, hanya bisa Approval TL')+'). Konfirmasi dengan PIN Anda.'+(APR.hasPin?'':' PIN Anda belum diatur, minta admin mengatur PIN.');
-  const col=(k)=>{ const ok=!!ap[k], mine=(k==='mod')===APR.mgr, lock=(k==='tl'&&ap.mod);
-    let st=ok?'✓ Disetujui'+esc(ts(ap[k+'_at'])):(k==='mod'&&!ap.tl?'Menunggu TL':'Belum');
+  $('ap-who').textContent='Hari H: '+fd(d)+'. Team Leader / Manager: tekan tombol, pilih nama Anda, lalu masukkan PIN Anda sendiri di HP ini.';
+  const col=(k)=>{ const ok=!!ap[k], lock=(k==='tl'&&ap.mod), has=(APR[k]||[]).length>0;
+    const st=ok?'✓ Disetujui oleh '+esc(ap[k+'_by']||'?')+esc(ts(ap[k+'_at'])):(k==='mod'&&!ap.tl?'Menunggu Approval TL':'Belum');
     let btn;
-    if(!d) btn='';
-    else if(ok) btn=(mine&&!lock)?'<button class="btn ghost" data-ap="0" data-k="'+k+'">Batalkan Approval '+k.toUpperCase()+'</button>':'';
-    else if(!mine) btn='<button class="btn" disabled title="Khusus '+(k==='tl'?'Team Leader':'Store Manager / Asst Manager')+'">Approve '+k.toUpperCase()+'</button>';
+    if(ok) btn=lock?'':'<button class="btn ghost" data-ap="0" data-k="'+k+'">Batalkan Approval '+k.toUpperCase()+'</button>';
+    else if(!has) btn='<button class="btn" disabled>Belum ada PIN '+k.toUpperCase()+'</button>';
     else if(k==='mod'&&!ap.tl) btn='<button class="btn" disabled>Approve MOD (menunggu TL)</button>';
     else btn='<button class="btn" data-ap="1" data-k="'+k+'">Approve '+k.toUpperCase()+'</button>';
-    return '<div><small>Approval '+k.toUpperCase()+'</small><b>'+st+'</b>'+btn+'</div>'; };
+    return '<div><small>Approval '+(k==='tl'?'TL':'MOD')+'</small><b>'+st+'</b>'+btn+'</div>'; };
   $('ap-grid').innerHTML=col('tl')+col('mod');
   card.hidden=false;
 }
-function apErr(r){ const m={nopin:'PIN Anda belum diatur. Minta admin mengatur PIN.',locked:'Terlalu banyak salah. Coba lagi dalam '+(r.wait||5)+' menit.',bad:'PIN salah. Sisa percobaan: '+r.left+'.',role:'Akun Anda tidak punya izin.',role_tl:'Approval TL hanya untuk Team Leader.',role_mod:'Approval MOD hanya untuk Store Manager / Asst Manager.',need_tl:'Approval TL harus dilakukan lebih dulu.',mod_first:'Batalkan Approval MOD lebih dulu.',format:'PIN harus 6 digit angka.'}; return m[r.err]||'Gagal ('+(r.err||'error')+').'; }
+function apErr(r){ const m={nopin:'PIN akun ini belum diatur. Minta admin mengatur PIN.',locked:'Terlalu banyak salah. Akun ini terkunci, coba lagi dalam '+(r.wait||5)+' menit.',bad:'PIN salah. Sisa percobaan: '+r.left+'.',role_tl:'Nama ini bukan Team Leader.',role_mod:'Nama ini bukan Manager (MOD).',need_tl:'Approval TL harus dilakukan lebih dulu.',mod_first:'Batalkan Approval MOD lebih dulu.',not_owner:'Approval hanya bisa dibatalkan oleh orang yang menyetujuinya.',format:'PIN harus 6 digit angka.',code:'Kode salesperson tidak dikenali.',key:'Link tidak valid.',nouser:'Nama tidak ditemukan.'}; return m[r.err]||'Gagal ('+(r.err||'error')+').'; }
 function apPin(on,k){
-  const d=apDay(), m=/^S(\d+)-/.exec(RD.p.id||''); if(!d||!m) return;
+  const d=apDay(); if(!APR) return;
+  const list=APR[k]||[];
   let o=$('pin-ov'); if(!o){ o=document.createElement('div'); o.id='pin-ov'; o.className='pinov'; o.addEventListener('click',e=>{ if(e.target===o||(e.target.closest&&e.target.closest('[data-pinx]'))) o.hidden=true; }); document.body.appendChild(o); }
-  o.innerHTML='<div class="pinbox" role="dialog" aria-modal="true"><h3>'+(on?'Approve ':'Batalkan ')+k.toUpperCase()+'</h3><p class="note">'+esc(RD.p.name||RD.p.id)+' · '+esc(fd(d))+'</p><input id="pin-in" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" data-lpignore="true" name="pin-'+Math.random().toString(36).slice(2,7)+'" placeholder="PIN 6 digit"><div class="pinerr" id="pin-err"></div><div class="pinbt"><button class="btn ghost" data-pinx type="button">Batal</button><button class="btn" id="pin-ok" type="button">Konfirmasi</button></div></div>';
-  o.hidden=false; const inp=$('pin-in'); inp.focus(); inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/\D/g,'').slice(0,6); });
+  o.innerHTML='<div class="pinbox" role="dialog" aria-modal="true"><h3>'+(on?'Approve ':'Batalkan ')+k.toUpperCase()+'</h3><p class="note">'+esc(RD.p.name||RD.p.id)+' · '+esc(fd(d))+'</p><label class="note">Nama '+(k==='tl'?'Team Leader':'Manager')+'</label><select id="pin-who">'+list.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select><input id="pin-in" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" data-lpignore="true" name="pin-'+Math.random().toString(36).slice(2,7)+'" placeholder="PIN 6 digit"><div class="pinerr" id="pin-err"></div><div class="pinbt"><button class="btn ghost" data-pinx type="button">Batal</button><button class="btn" id="pin-ok" type="button">Konfirmasi</button></div></div>';
+  o.hidden=false; const inp=$('pin-in'); inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/\D/g,'').slice(0,6); }); $('pin-who').focus();
   const go=async()=>{ const v=inp.value.trim(); if(!/^\d{6}$/.test(v)){ $('pin-err').textContent='Masukkan PIN 6 digit.'; return; }
-    $('pin-ok').disabled=true; const {data,error}=await SBA.rpc('sp_approve',{p_store:m[1],p_sales_id:RD.p.id,p_date:d,p_kind:k,p_pin:v,p_on:on}); $('pin-ok').disabled=false;
+    $('pin-ok').disabled=true; const {data,error}=await SB.rpc('sp_approve_anon',{p_key:KEY,p_code:CODE,p_kind:k,p_approver:$('pin-who').value,p_pin:v,p_on:on}); $('pin-ok').disabled=false;
     if(error||!data){ $('pin-err').textContent='Gagal menghubungi server. Coba lagi.'; return; }
     if(!data.ok){ $('pin-err').textContent=apErr(data); inp.value=''; inp.focus(); return; }
-    const r=data.row, i=(RD.appr||[]).findIndex(x=>x.d===d), n={d,tl:r.tl_ok,tl_at:r.tl_at,mod:r.mod_ok,mod_at:r.mod_at};
-    RD.appr=RD.appr||[]; if(i>=0) RD.appr[i]=n; else RD.appr.push(n);
-    o.hidden=true; render(RD); $('ap-msg').textContent=(on?'Approval ':'Pembatalan approval ')+k.toUpperCase()+' '+fd(d)+' tersimpan.'; };
+    const r=data.row, i=(RD.appr||[]).findIndex(x=>x.d===r.d); RD.appr=RD.appr||[]; if(i>=0) RD.appr[i]=r; else RD.appr.push(r);
+    o.hidden=true; render(RD); $('ap-msg').textContent=(on?'Approval ':'Pembatalan approval ')+k.toUpperCase()+' tersimpan.'; };
   $('pin-ok').onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter') go(); };
 }
 function init(){
