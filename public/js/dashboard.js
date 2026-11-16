@@ -75,7 +75,7 @@ function parseReport(XLSX, buf, storeCode){
     }
     const hr = hourOf(get(r,'time')); if(hr!==null) d.hours[hr] = (d.hours[hr]||0)+amt;
     if(!sid){ d.unS += amt; d.unL++; d.unRec.add(rn); continue; }
-    const p = d.people[sid] || (d.people[sid]={id:sid,name:'',sales:0,incl:0,qty:0,rec:new Set(),lines:0,disc:0,cats:{},brands:{},pb:0,it:{}});
+    const p = d.people[sid] || (d.people[sid]={id:sid,name:'',sales:0,incl:0,qty:0,rec:new Set(),lines:0,disc:0,cats:{},brands:{},pb:0,pbc:{},it:{}});
     if(!p.name){ const nm=clean(get(r,'salescode name')); if(nm && !/^(null|none|nan)$/i.test(nm)) p.name=nm; }
     p.sales += amt; p.incl += inc; p.qty += num(get(r,'qty'));
     p.rec.add(rn); p.lines++; p.disc += num(get(r,'dicount amount'));
@@ -83,8 +83,8 @@ function parseReport(XLSX, buf, storeCode){
     p.cats[cat] = (p.cats[cat]||0)+amt;
     const mb = String(get(r,'master brand')).trim().toUpperCase() || 'LAINNYA';
     p.brands[mb] = (p.brands[mb]||0)+amt;
-    { const ino=String(get(r,'item no')).trim(), idesc=clean(get(r,'item name')), ik=ino||idesc; const ie=p.it[ik]||(p.it[ik]=[cat,mb,ino,idesc,0,0]); ie[4]+=num(get(r,'qty')); ie[5]+=amt; }
-    if(/^private brand$/i.test(String(get(r,'master type brand')).trim())) p.pb += amt;
+    { const ino=String(get(r,'item no')).trim(), idesc=clean(get(r,'item name')), ik=ino||idesc; const ie=p.it[ik]||(p.it[ik]=[cat,mb,ino,idesc,0,0]); ie[4]+=num(get(r,'qty')); ie[5]+=amt; if(/^private brand$/i.test(String(get(r,'master type brand')).trim())) ie[6]=1; }
+    if(/^private brand$/i.test(String(get(r,'master type brand')).trim())){ p.pb += amt; p.pbc[cat]=(p.pbc[cat]||0)+amt; }
   }
   const out = {};
   for(const date in days){
@@ -95,8 +95,9 @@ function parseReport(XLSX, buf, storeCode){
       people:Object.values(d.people).map(p=>{
         const nm = p.name || p.id;
         const cats = {}; for(const c in p.cats) cats[c]=Math.round(p.cats[c]);
+        const pbc = {}; for(const c in p.pbc){ const v=Math.round(p.pbc[c]); if(v) pbc[c]=v; }
         const brands = {}; for(const b in p.brands){ const v=Math.round(p.brands[b]); if(v) brands[b]=v; }
-        return {id:p.id,name:nm,role:/KASIR/i.test(nm)?'Kasir':'Sales',sales:Math.round(p.sales),incl:Math.round(p.incl),qty:Math.round(p.qty),receipts:p.rec.size,lines:p.lines,disc:Math.round(p.disc),cats,brands,pb:Math.round(p.pb),it:Object.values(p.it).map(e=>[e[0],e[1],e[2],e[3],Math.round(e[4]*100)/100,Math.round(e[5])])};
+        return {id:p.id,name:nm,role:/KASIR/i.test(nm)?'Kasir':'Sales',sales:Math.round(p.sales),incl:Math.round(p.incl),qty:Math.round(p.qty),receipts:p.rec.size,lines:p.lines,disc:Math.round(p.disc),cats,brands,pb:Math.round(p.pb),pbc,it:Object.values(p.it).map(e=>{ const a=[e[0],e[1],e[2],e[3],Math.round(e[4]*100)/100,Math.round(e[5])]; if(e[6]) a.push(1); return a; })};
       }),
       mb:Object.fromEntries(Object.entries(d.mb).map(([k,v])=>[k,{q:Math.round(v.q),s:Math.round(v.s)}])),
       prot:Object.values(d.prot).map(x=>({id:x.id,name:x.name||x.id,q:Math.round(x.q),s:Math.round(x.s)})),
@@ -669,6 +670,7 @@ function renderTopBrand(){
 }
 
 /* Tampilan salesperson (validasi TL): sama dengan halaman link kode salesperson */
+let SPCTX={isPB:false,BR:'',ZCs:new Set()};
 let spSel='', spZ='', spShift=[], spDate='', spAppr={}, spApprT={}, spMgr=false, spJab='';
 async function spLoadRole(email){
   if(!SB||!email) return;
@@ -695,18 +697,19 @@ document.addEventListener('change',async ev=>{
 });
 function spOpen(k){
   const e=SCHM[spSel], last=dates[dates.length-1]; if(!e||!last) return;
-  let dts,ttl,per,mode=''; const BRQ=String(e.brand||'').trim().toUpperCase(); const lf=d=>fd(d,{day:'numeric',month:'short',year:'numeric'});
+  let dts,ttl,per,mode='',kind=''; const BRQ=String(e.brand||'').trim().toUpperCase(); const lf=d=>fd(d,{day:'numeric',month:'short',year:'numeric'});
   if(k==='D'){ dts=[last]; ttl='Item terjual · Daily'; per=lf(last); }
   else if(k==='M'){ dts=SCH.dates.filter(d=>d<=last); ttl='Item terjual · MTD'; per='1 s.d. '+lf(last)+' (semua hari)'; }
+  else if(/^K:/.test(k)){ kind=k.slice(2); dts=SCH.dates.filter(d=>d<=last); ttl=(kind==='mb'?(SPCTX.isPB?'Private Brand (category zonasi)':'Master brand '+(e.brand||'')):kind==='non'?(SPCTX.isPB?'Non Private Brand':'Non master brand'):'Total penjualan')+' · MTD'; per='1 s.d. '+lf(last); }
   else { const pr=String(k).split('|'); mode=pr[1]||''; k=pr[0]; dts=[k]; ttl='Item terjual · '+fd(k,{weekday:'short',day:'numeric',month:'short'}); per=lf(k); }
-  const m={}; dts.forEach(d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); if(q&&Array.isArray(q.it)) q.it.forEach(r=>{ const key=r[2]||r[3]; const t=m[key]||(m[key]=[r[0],r[1],r[2],r[3],0,0]); t[4]+=r[4]; t[5]+=r[5]; }); });
+  const m={}; dts.forEach(d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); if(q&&Array.isArray(q.it)) q.it.forEach(r=>{ if(kind){ const isMb=SPCTX.isPB?(r[6]===1&&SPCTX.ZCs.has(String(r[0]==null?'':r[0]).trim().toUpperCase())):(SPCTX.BR&&String(r[1]||'').trim().toUpperCase()===SPCTX.BR); if(kind==='mb'&&!isMb) return; if(kind==='non'&&isMb) return; } const key=r[2]||r[3]; const t=m[key]||(m[key]=[r[0],r[1],r[2],r[3],0,0]); t[4]+=r[4]; t[5]+=r[5]; }); });
   const it=Object.values(m).sort((a,b)=>b[5]-a[5]), tq=it.reduce((s,r)=>s+r[4],0), ts=it.reduce((s,r)=>s+r[5],0);
   const html=it.length? '<table class="pt"><thead><tr><th>Category</th><th>No Item</th><th>Description</th><th class="rt">Qty</th><th class="rt">Value</th></tr></thead><tbody>'+it.map(r=>'<tr><td>'+esc(title(r[0]))+'</td><td class="num">'+esc(r[2])+'</td><td>'+esc(r[3])+'</td><td class="num rt">'+fmtN.format(r[4])+'</td><td class="num rt">'+fmtN.format(r[5])+'</td></tr>').join('')+'<tr class="tot"><td colspan="3"><b>TOTAL ('+it.length+' item)</b></td><td class="num rt"><b>'+fmtN.format(tq)+'</b></td><td class="num rt"><b>'+fmtN.format(ts)+'</b></td></tr></tbody></table>' : '<p class="note" style="padding:14px 4px">Belum ada rincian item untuk periode ini.</p>';
   kShow(ttl,[['Salesperson',e.name||e.id],['Sales ID',e.id],['Zonasi',e.zona||'–'],['Total value','Rp '+fmtN.format(ts)]],html,null);
   $('kpop-per').textContent=per+' · sales exclude PPN';
 }
 document.addEventListener('click',ev=>{ const c=ev.target.closest&&ev.target.closest('#sp-body [data-spd]'); if(!c) return; spOpen(c.dataset.spd); });
-document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-body .bg[data-spd]')) spOpen(ev.target.dataset.spd); });
+document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-body [data-spd][role=button]')) spOpen(ev.target.dataset.spd); });
 function renderSP(noFetch){
   const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
   const all0=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
@@ -730,8 +733,11 @@ function renderSP(noFetch){
   const cls=p=>p==null?'spn':p>=100?'spg':p>=75?'spa':'spb', pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
   const sales={}; dates.forEach(d=>{ const q=(days[d].people||[]).find(x=>x.id===spSel); sales[d]=q?(+q.sales||0):0; });
   const BR=String(e.brand||'').trim().toUpperCase(), noAp=!!TIM;
-  const isPB=BR==='PRIVATE BRAND', CATU=String(e.cat||'').trim().toUpperCase();
-  const dq=d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); const it=(q&&q.it)||[]; let mb=0,bca=0,cat=0; it.forEach(r=>{ const v=+r[5]||0, m=String(r[1]||'').trim().toUpperCase(); if(m==='BCA') bca+=+r[4]||0; if(!isPB&&BR&&m===BR) mb+=v; }); if(isPB) mb=+(q&&q.pb)||0; const cs=(q&&q.cats)||{}; Object.keys(cs).forEach(k=>{ if(String(k).trim().toUpperCase()===CATU) cat+=+cs[k]||0; }); return {mb,bca,cat,inv:q?(+q.receipts||0):0}; };
+  const isPB=BR==='PRIVATE BRAND', UPc=x=>String(x==null?'':x).trim().toUpperCase();
+  const ZCs=new Set(SCH.people.filter(x=>x.zona&&e.zona&&UPc(x.zona)===UPc(e.zona)&&x.cat).map(x=>UPc(x.cat))); if(!ZCs.size&&e.cat) ZCs.add(UPc(e.cat)); // category yang termasuk di zonasi salesperson
+  const sumC=o=>{ let v=0; Object.keys(o||{}).forEach(k=>{ if(ZCs.has(UPc(k))) v+=+o[k]||0; }); return v; };
+  let pbFb=false; SPCTX={isPB,BR,ZCs};
+  const dq=d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); const it=(q&&q.it)||[]; let mb=0,bca=0; it.forEach(r=>{ const v=+r[5]||0, m=UPc(r[1]); if(m==='BCA') bca+=+r[4]||0; if(!isPB&&BR&&m===BR) mb+=v; }); if(isPB){ if(q&&q.pbc&&typeof q.pbc==='object') mb=sumC(q.pbc); else { mb=+(q&&q.pb)||0; if(mb>0) pbFb=true; } } return {mb,bca,cat:isPB?sumC(q&&q.cats):0,inv:q?(+q.receipts||0):0}; };
   const apr=spAppr[spSel]||{};
   const apWho=(ap,k)=>{ if(!ap[k+'_ok']) return ''; const t=ap[k+'_at']?new Date(ap[k+'_at']).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''; return 'Disetujui oleh '+(ap[k+'_by']||'?')+(t?' · '+t:''); };
   const ab=(k,d,ap,on)=>{ const ok=!!ap[k+'_ok'], who=apWho(ap,k);
@@ -749,8 +755,8 @@ function renderSP(noFetch){
   rows+='<tr class="tt"><td>TOTAL s.d. '+esc(last?fd(last,{day:'numeric',month:'short'}):'-')+'</td><td></td><td>'+nn(mB)+'</td><td>'+nn(mA)+'</td><td>'+pc(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td>'+(noAp?'':'<td></td><td></td>')+'</tr>';
   const li=SCH.dates.indexOf(last), lw=li>=0&&isWork(e.c[li]), da=last?(sales[last]||0):0, dp=(lw&&e.tpe>0)?da/e.tpe*100:null;
   const nonv=Math.max(0,mA-mMB), sh=v=>mA>0?pc(v/mA*100):'–', cn=String(e.cat||'–');
-  let cmp=''; if(isPB){ const pc2=mCat>0?mMB/mCat*100:null; cmp='<div class="spcmp"><b>Perbandingan Private Brand dengan Category '+esc(title(cn))+'</b><div class="cbar"><i style="width:'+(mCat>0?Math.min(100,mMB/mCat*100):0)+'%"></i></div><div class="note">Private Brand (Master type) Rp '+nn(mMB)+' · Total category Rp '+nn(mCat)+' → <b>'+(pc2==null?'–':pc(pc2))+'</b> dari penjualan category. Non Private Brand di category ini: Rp '+nn(Math.max(0,mCat-mMB))+'. Penjualan di luar category: Rp '+nn(Math.max(0,mA-mCat))+'.</div></div>'; }
-  const mbc='<div class="spmb"><b>Total penjualan master brand</b> <span class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short'})):'Belum ada data')+' · semua hari ber-penjualan dihitung, termasuk OFF/CT/RO'+(isPB?' · Private Brand dihitung dari Master type brand':'')+'</span><div class="spmbs"><div><small>'+(isPB?'Private Brand (Master type)':'Master brand '+esc(e.brand||''))+'</small><b>Rp '+nn(mMB)+'</b><span>'+sh(mMB)+' dari total</span></div><div><small>'+(isPB?'Non Private Brand':'Non master brand')+'</small><b>Rp '+nn(nonv)+'</b><span>'+sh(nonv)+' dari total</span></div><div class="tot"><small>Total penjualan</small><b>Rp '+nn(mA)+'</b><span>'+(mp==null?'':'Pencapaian '+pc(mp)+' dari budget')+'</span></div></div>'+cmp+'</div>';
+  let cmp=''; if(isPB){ const pc2=mCat>0?mMB/mCat*100:null, zl=[...ZCs].map(title).join(', '); cmp='<div class="spcmp"><b>Perbandingan Private Brand dengan Category zonasi</b> <span class="note">'+esc(e.zona||'–')+': '+esc(zl)+'</span><div class="cbar"><i style="width:'+(mCat>0?Math.min(100,mMB/mCat*100):0)+'%"></i></div><div class="note">Private Brand (Master type, hanya category zonasi) Rp '+nn(mMB)+' · Total penjualan category zonasi Rp '+nn(mCat)+' → <b>'+(pc2==null?'–':pc(pc2))+'</b> dari penjualan category zonasi.</div>'+(pbFb?'<div class="note" style="color:#a86a00">Sebagian data lama belum memuat rincian Private Brand per category, hari itu dihitung dari semua category. Upload ulang file penjualan.</div>':'')+'</div>'; }
+  const mbc='<div class="spmb"><b>Total penjualan master brand</b> <span class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short'})):'Belum ada data')+' · semua hari ber-penjualan dihitung, termasuk OFF/CT/RO'+(isPB?' · Private Brand = Master type brand, hanya category zonasi':'')+' · klik kartu untuk melihat item</span><div class="spmbs"><div class="spk" data-spd="K:mb" tabindex="0" role="button"><small>'+(isPB?'Private Brand (category zonasi)':'Master brand '+esc(e.brand||''))+'</small><b>Rp '+nn(mMB)+'</b><span>'+sh(mMB)+' dari total</span></div><div class="spk" data-spd="K:non" tabindex="0" role="button"><small>'+(isPB?'Non Private Brand':'Non master brand')+'</small><b>Rp '+nn(nonv)+'</b><span>'+sh(nonv)+' dari total</span></div><div class="tot spk" data-spd="K:all" tabindex="0" role="button"><small>Total penjualan</small><b>Rp '+nn(mA)+'</b><span>'+(mp==null?'':'Pencapaian '+pc(mp)+' dari budget')+'</span></div></div>'+cmp+'</div>';
   box.innerHTML='<div class="spv"><b style="font-size:18px">'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id)+'</span>'+
     '<div class="spi"><div><small>Zonasi</small><b>'+esc(e.zona||'–')+'</b></div><div><small>Category</small><b>'+esc(e.cat||'–')+'</b></div><div><small>Master brand</small><b>'+esc(e.brand||'–')+'</b></div></div>'+
     '<div class="sps"><div><small>Achievement Daily</small><div class="note">'+(last?esc(fd(last,{weekday:'short',day:'numeric',month:'short'})):'Belum ada data')+'</div><div class="bg spk '+cls(dp)+'" data-spd="D" tabindex="0" role="button">'+pc(dp)+'</div><div class="note">'+(lw?'Actual Rp '+nn(da)+' dari budget Rp '+nn(e.tpe):'Hari non-shift (OFF/CT/RO dll), tidak ada budget'+(da?' · penjualan Rp '+nn(da)+' tetap dihitung di MTD':''))+'</div></div>'+

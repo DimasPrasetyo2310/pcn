@@ -36,3 +36,5 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 -- Tambah/hapus manager: insert into sp_appr_managers(email, jabatan) values ('x@mitra10.com','Asst Manager');
 
 -- migration sp_view_pb_cats: sp_view_data per hari juga mengembalikan pb (penjualan Master Type Private Brand) dan cats (penjualan per category).
+
+-- migration sp_view_zone_pbc: sp_view_data mengembalikan zcats (category di zonasi salesperson) dan pbc per hari (penjualan Private Brand per category).
