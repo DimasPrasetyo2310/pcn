@@ -28,3 +28,6 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 -- Migrasi 'sp_view_items': sp_view_data kini juga mengembalikan 'it' (rincian item per hari:
 -- [category, master brand, no item, deskripsi, qty, value]) di setiap elemen 'sales'.
 -- Migrasi 'sp_view_stamps': sp_view_data juga mengembalikan sched_at dan data_at (waktu unggah terakhir).
+-- Migrasi 'sp_approvals': tabel sp_approvals (approval TL dan MOD per salesperson per tanggal).
+-- RLS: baca untuk semua peran login, tulis hanya editor/admin; trigger mengisi tl_by/mod_by dan waktu dari JWT.
+-- sp_view_data juga mengembalikan 'r' (jumlah invoice per hari) dan 'appr' (status approval).

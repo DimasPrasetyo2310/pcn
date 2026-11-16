@@ -669,14 +669,29 @@ function renderTopBrand(){
 }
 
 /* Tampilan salesperson (validasi TL): sama dengan halaman link kode salesperson */
-let spSel='';
+let spSel='', spAppr={}, spApprT={};
+async function spLoadAppr(){
+  if(TIM||!SB||!spSel) return; const id=spSel;
+  if(spApprT[id]&&Date.now()-spApprT[id]<15000) return; spApprT[id]=Date.now();
+  const { data, error } = await SB.from('sp_approvals').select('sale_date,tl_ok,tl_by,tl_at,mod_ok,mod_by,mod_at').eq('store_code',D.code).eq('sales_id',id);
+  if(error){ spApprT[id]=0; return; }
+  const o={}; (data||[]).forEach(r=>{ o[r.sale_date]=r; }); spAppr[id]=o; if(id===spSel) renderSP(true);
+}
+document.addEventListener('change',async ev=>{
+  const c=ev.target; if(!c||!c.classList||!c.classList.contains('spc')) return;
+  const k=c.dataset.k, d=c.dataset.d, id=spSel, msg=$('sp-msg'); c.disabled=true;
+  const row={store_code:D.code, sales_id:id, sale_date:d}; row[k+'_ok']=c.checked;
+  const { data, error } = await SB.from('sp_approvals').upsert(row,{onConflict:'store_code,sales_id,sale_date'}).select('sale_date,tl_ok,tl_by,tl_at,mod_ok,mod_by,mod_at').single();
+  if(error){ c.checked=!c.checked; c.disabled=false; if(msg) msg.textContent='Gagal menyimpan approval: '+((/row-level|permission/i.test(error.message||''))?'akun Anda tidak punya izin (hanya editor/admin).':(error.message||'error')); return; }
+  (spAppr[id]||(spAppr[id]={}))[d]=data; renderSP(true);
+});
 function spOpen(k){
   const e=SCHM[spSel], last=dates[dates.length-1]; if(!e||!last) return;
-  let dts,ttl,per; const lf=d=>fd(d,{day:'numeric',month:'short',year:'numeric'});
+  let dts,ttl,per,mode=''; const BRQ=String(e.brand||'').trim().toUpperCase(); const lf=d=>fd(d,{day:'numeric',month:'short',year:'numeric'});
   if(k==='D'){ dts=[last]; ttl='Item terjual · Daily'; per=lf(last); }
   else if(k==='M'){ dts=SCH.dates.filter((d,i)=>d<=last&&isWork(e.c[i])); ttl='Item terjual · MTD'; per='1 s.d. '+lf(last)+' (hari kerja)'; }
-  else { dts=[k]; ttl='Item terjual · '+fd(k,{weekday:'short',day:'numeric',month:'short'}); per=lf(k); }
-  const m={}; dts.forEach(d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); if(q&&Array.isArray(q.it)) q.it.forEach(r=>{ const key=r[2]||r[3]; const t=m[key]||(m[key]=[r[0],r[1],r[2],r[3],0,0]); t[4]+=r[4]; t[5]+=r[5]; }); });
+  else { const pr=String(k).split('|'); mode=pr[1]||''; k=pr[0]; dts=[k]; ttl=(mode==='mb'?'Master brand · ':mode==='non'?'Non master brand · ':'Item terjual · ')+fd(k,{weekday:'short',day:'numeric',month:'short'}); per=lf(k); }
+  const m={}; dts.forEach(d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); if(q&&Array.isArray(q.it)) q.it.forEach(r=>{ const isMb=BRQ&&String(r[1]||'').trim().toUpperCase()===BRQ; if(mode==='mb'&&!isMb) return; if(mode==='non'&&isMb) return; const key=r[2]||r[3]; const t=m[key]||(m[key]=[r[0],r[1],r[2],r[3],0,0]); t[4]+=r[4]; t[5]+=r[5]; }); });
   const it=Object.values(m).sort((a,b)=>b[5]-a[5]), tq=it.reduce((s,r)=>s+r[4],0), ts=it.reduce((s,r)=>s+r[5],0);
   const html=it.length? '<table class="pt"><thead><tr><th>Category</th><th>Master brand</th><th>No Item</th><th>Description</th><th class="rt">Qty</th><th class="rt">Value</th></tr></thead><tbody>'+it.map(r=>'<tr><td>'+esc(title(r[0]))+'</td><td>'+esc(title(r[1]))+'</td><td class="num">'+esc(r[2])+'</td><td>'+esc(r[3])+'</td><td class="num rt">'+fmtN.format(r[4])+'</td><td class="num rt">'+fmtN.format(r[5])+'</td></tr>').join('')+'<tr class="tot"><td colspan="4"><b>TOTAL ('+it.length+' item)</b></td><td class="num rt"><b>'+fmtN.format(tq)+'</b></td><td class="num rt"><b>'+fmtN.format(ts)+'</b></td></tr></tbody></table>' : '<p class="note" style="padding:14px 4px">Belum ada rincian item untuk periode ini.</p>';
   kShow(ttl,[['Salesperson',e.name||e.id],['Sales ID',e.id],['Zonasi',e.zona||'–'],['Total value','Rp '+fmtN.format(ts)]],html,null);
@@ -684,28 +699,39 @@ function spOpen(k){
 }
 document.addEventListener('click',ev=>{ const c=ev.target.closest&&ev.target.closest('#sp-body [data-spd]'); if(!c) return; spOpen(c.dataset.spd); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-body .bg[data-spd]')) spOpen(ev.target.dataset.spd); });
-function renderSP(){
+function renderSP(noFetch){
   const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
   const ppl=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
   if(!ppl.length){ sel.innerHTML=''; box.innerHTML='<p class="note">Unggah file jadwal &amp; target untuk menampilkan tampilan ini.</p>'; return; }
   if(!ppl.some(e=>e.id===spSel)) spSel=ppl[0].id;
   sel.innerHTML=ppl.map(e=>'<option value="'+esc(e.id)+'"'+(e.id===spSel?' selected':'')+'>'+esc((e.name||e.id)+' · '+e.id.replace(/^S\d+-0*/,''))+'</option>').join('');
+  if(!noFetch) spLoadAppr();
   const nn=v=>fmtN.format(Math.round(v)); const e=SCHM[spSel], last=dates[dates.length-1]||'';
   const cls=p=>p==null?'spn':p>=100?'spg':p>=75?'spa':'spb', pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
   const sales={}; dates.forEach(d=>{ const q=(days[d].people||[]).find(x=>x.id===spSel); sales[d]=q?(+q.sales||0):0; });
-  let mB=0,mA=0,monthB=0,rows='';
-  SCH.dates.forEach((d,i)=>{ const c=e.c[i], w=isWork(c), fut=!last||d>last, b=w?e.tpe:0, a=sales[d]||0;
-    if(w) monthB+=b; if(!fut&&w){ mB+=b; mA+=a; }
+  const BR=String(e.brand||'').trim().toUpperCase(), noAp=!!TIM;
+  const dq=d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); const it=(q&&q.it)||[]; let mb=0,non=0,bca=0; it.forEach(r=>{ const v=+r[5]||0, m=String(r[1]||'').trim().toUpperCase(); if(m==='BCA') bca+=+r[4]||0; if(BR&&m===BR) mb+=v; else non+=v; }); return {has:it.length>0,mb,non,bca,inv:q?(+q.receipts||0):0}; };
+  const apr=spAppr[spSel]||{};
+  const apWho=(ap,k)=>{ if(!ap[k+'_ok']) return ''; const t=ap[k+'_at']?new Date(ap[k+'_at']).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''; return 'Disetujui oleh '+(ap[k+'_by']||'?')+(t?' · '+t:''); };
+  const ab=(k,d,ap,on)=>{ const ok=!!ap[k+'_ok'], who=apWho(ap,k);
+    if(on) return '<td class="c"><input type="checkbox" class="spc" data-k="'+k+'" data-d="'+d+'"'+(ok?' checked':'')+' title="'+esc(who||'Klik untuk menyetujui')+'" aria-label="Approval '+k.toUpperCase()+' '+d+'"></td>';
+    return '<td class="c" title="'+esc(who)+'">'+(ok?'<span class="spg">✓</span>':'–')+'</td>'; };
+  const canAp=canWrite===true&&!noAp;
+  let mB=0,mA=0,mMB=0,mNon=0,tInv=0,tBca=0,monthB=0,rows='';
+  SCH.dates.forEach((d,i)=>{ const c=e.c[i], w=isWork(c), fut=!last||d>last, b=w?e.tpe:0, a=sales[d]||0, m=dq(d);
+    if(w) monthB+=b; if(!fut){ tInv+=m.inv; tBca+=m.bca; if(w){ mB+=b; mA+=a; mMB+=m.mb; mNon+=m.non; } }
     const pp=(w&&b>0&&!fut)?a/b*100:null;
-    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td'+(fut||!a?'':' class="spk" data-spd="'+d+'" title="Lihat item"')+'>'+(fut?'':nn(a))+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td></tr>'; });
+    const cell=(v,k)=>fut?'<td></td>':(m.has?'<td'+(v?' class="spk" data-spd="'+d+'|'+k+'" title="Lihat item"':'')+'>'+nn(v)+'</td>':'<td>'+(a?'–':'0')+'</td>');
+    const ap=apr[d]||{};
+    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td>'+cell(m.mb,'mb')+cell(m.non,'non')+'<td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td><td>'+(fut?'':m.inv)+'</td><td>'+(fut?'':m.bca)+'</td>'+(noAp?'':(fut?'<td></td><td></td>':ab('tl',d,ap,canAp)+ab('mod',d,ap,canAp)))+'</tr>'; });
   const mp=mB>0?mA/mB*100:null;
-  rows+='<tr class="tt"><td>TOTAL s.d. '+esc(last?fd(last,{day:'numeric',month:'short'}):'-')+'</td><td></td><td>'+nn(mB)+'</td><td>'+nn(mA)+'</td><td>'+pc(mp)+'</td></tr>';
+  rows+='<tr class="tt"><td>TOTAL s.d. '+esc(last?fd(last,{day:'numeric',month:'short'}):'-')+'</td><td></td><td>'+nn(mB)+'</td><td>'+nn(mMB)+'</td><td>'+nn(mNon)+'</td><td>'+pc(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td>'+(noAp?'':'<td></td><td></td>')+'</tr>';
   const li=SCH.dates.indexOf(last), lw=li>=0&&isWork(e.c[li]), da=last?(sales[last]||0):0, dp=(lw&&e.tpe>0)?da/e.tpe*100:null;
   box.innerHTML='<div class="spv"><b style="font-size:18px">'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id)+'</span>'+
     '<div class="spi"><div><small>Zonasi</small><b>'+esc(e.zona||'–')+'</b></div><div><small>Category</small><b>'+esc(e.cat||'–')+'</b></div><div><small>Master brand</small><b>'+esc(e.brand||'–')+'</b></div></div>'+
     '<div class="sps"><div><small>Achievement Daily</small><div class="note">'+(last?esc(fd(last,{weekday:'short',day:'numeric',month:'short'})):'Belum ada data')+'</div><div class="bg spk '+cls(dp)+'" data-spd="D" tabindex="0" role="button">'+pc(dp)+'</div><div class="note">'+(lw?'Actual Rp '+nn(da)+' dari budget Rp '+nn(e.tpe):'Libur/cuti, tidak ada budget')+'</div></div>'+
     '<div><small>Achievement MTD</small><div class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short',year:'numeric'})):'Belum ada data')+'</div><div class="bg spk '+cls(mp)+'" data-spd="M" tabindex="0" role="button">'+pc(mp)+'</div><div class="note">Actual Rp '+nn(mA)+' dari budget Rp '+nn(mB)+'</div></div></div>'+
-    '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Actual</th><th>%</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    '<div class="note">Target satu bulan penuh: Rp '+nn(monthB)+'</div><div class="spw"><table><thead><tr><th>Tanggal</th><th>Shift</th><th>Budget</th><th>Master brand</th><th>Non master brand</th><th>%</th><th>Invoice</th><th>Proteksi Qty</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+rows+'</tbody></table></div><p class="note" id="sp-msg">'+(noAp?'':(canAp?'Centang kotak Approval TL / MOD untuk menyetujui; centang lagi untuk membatalkan.':'Peran Anda hanya bisa melihat approval.'))+' % = (Master brand + Non master brand) ÷ Budget. Proteksi Qty = qty master brand BCA.</p></div>';
 }
 document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='sp-sel'){ spSel=ev.target.value; renderSP(); } });
 function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); renderTable(); renderLow(); renderFoot(); }
