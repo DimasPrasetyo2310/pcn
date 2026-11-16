@@ -770,7 +770,7 @@ function spList(all0,last,noFetch){
     if(on) return '<td class="c"><input type="checkbox" class="spc" data-k="'+k+'" data-d="'+ld+'" data-id="'+esc(id)+'"'+(ok?' checked':'')+' title="'+esc(w||'Klik untuk menyetujui')+'" aria-label="Approval '+k.toUpperCase()+' '+esc(id)+'"></td>';
     return '<td class="c" title="'+esc(w)+'">'+(ok?'<span class="spg">✓</span>':'–')+'</td>'; };
   const PINM=typeof SB!=='undefined'&&!!SB&&!noAp;
-  const nm=x=>String(x||'?').split('@')[0], tm=t=>t?new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  const nm=x=>String(x||'?').split('@')[0].replace(/\./g,' ').replace(/\b\w/g,c=>c.toUpperCase()), tm=t=>t?new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
   const pb=(k,id,ap,can)=>{ const ok=!!ap[k+'_ok'], lbl=ok?'<span class="spg">✓</span> <small>'+esc(nm(ap[k+'_by']))+' · '+esc(tm(ap[k+'_at']))+'</small>':'–';
     if(k==='mod'&&!ap.tl_ok&&!ok) return '<td class="c">–</td>';
     if(!can||(k==='tl'&&ok&&ap.mod_ok)) return '<td class="c">'+lbl+'</td>';

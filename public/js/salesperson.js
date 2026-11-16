@@ -51,7 +51,7 @@ function render(r){
     return {mb,bca,cat:isPB?sumCats(x&&x.cats):0};
   };
   const byD={},apr={};(r.sales||[]).forEach(x=>{byD[x.d]=x});(r.appr||[]).forEach(x=>{apr[x.d]=x});
-  const ck=(on,at)=>on?'<span class="ok" title="'+esc(at?fdl(String(at).slice(0,10)):'Disetujui')+'">✓</span>':'<span class="na">–</span>';
+  const ck=(on,at,by)=>on?'<span class="ok" title="'+esc((by?'Disetujui oleh '+by:'Disetujui')+(at?' · '+fdl(String(at).slice(0,10)):''))+'">✓</span>'+(by?'<div class="by">'+esc(by)+'</div>':''):'<span class="na">–</span>';
   // Penjualan pada hari non-shift (OFF, CT, RO, dll) tetap dihitung; budget hanya pada hari kerja (S, P, M)
   let mB=0,mA=0,mMB=0,mCat=0,tInv=0,tBca=0,monthB=0,rows='';
   dates.forEach((d,i)=>{
@@ -65,7 +65,7 @@ function render(r){
     const pp=(w&&b>0&&!fut)?a/b*100:null;
     const today=last&&d===last;
     const ap=apr[d]||{};
-    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td><td'+(fut||!a?'':' class="clk" data-d="'+d+'" title="Lihat item"')+'>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td><td>'+(fut?'':inv)+'</td><td>'+(fut?'':m.bca)+'</td><td class="c">'+(fut?'':ck(ap.tl,ap.tl_at))+'</td><td class="c">'+(fut?'':ck(ap.mod,ap.mod_at))+'</td></tr>';
+    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td><td'+(fut||!a?'':' class="clk" data-d="'+d+'" title="Lihat item"')+'>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td><td>'+(fut?'':inv)+'</td><td>'+(fut?'':m.bca)+'</td><td class="c">'+(fut?'':ck(ap.tl,ap.tl_at,ap.tl_by))+'</td><td class="c">'+(fut?'':ck(ap.mod,ap.mod_at,ap.mod_by))+'</td></tr>';
   });
   const mp=mB>0?mA/mB*100:null;
   rows+='<tr class="tot"><td>TOTAL s.d. '+(last?esc(fdl(last)):'-')+'</td><td class="c"></td><td>'+rp(mB)+'</td><td>'+rp(mA)+'</td><td class="'+cls(mp)+'">'+pct(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td><td></td><td></td></tr>';
