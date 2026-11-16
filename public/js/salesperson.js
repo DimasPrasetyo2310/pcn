@@ -2,6 +2,8 @@
 'use strict';
 const CFG=window.APP_CONFIG||{};
 const SB=(window.supabase&&CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&!/YOUR-/.test(CFG.SUPABASE_URL))?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}}):null;
+const SBA=(window.supabase&&CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&!/YOUR-/.test(CFG.SUPABASE_URL))?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:false}}):null;
+let APR=null; // info pemberi approval (hanya bila TL/MOD sedang login di dashboard pada browser yang sama)
 const KEY=(new URLSearchParams(location.search).get('k')||'').trim();
 const $=id=>document.getElementById(id);
 const isWork=c=>/^[SPM](?:[\/.].*)?$/.test(String(c||''));
@@ -114,6 +116,7 @@ function render(r){
   const st=t=>{if(!t)return '–';const d=new Date(t);return isNaN(d)?'–':d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()+', '+String(d.getHours()).padStart(2,'0')+'.'+String(d.getMinutes()).padStart(2,'0')};
   $('stamp').textContent='Jadwal diunggah: '+st(r.sched_at)+' · Data penjualan diunggah: '+st(r.data_at)+' · Dimuat: '+st(new Date().toISOString());
   $('login').hidden=true;$('view').hidden=false;
+  renderApprover();
 }
 
 
@@ -161,6 +164,50 @@ async function load(code,fromForm){
   }
 }
 
+
+// ---- Validasi TL/MOD (muncul hanya bila TL/MOD sedang login di dashboard pada browser ini) ----
+async function initApprover(){
+  if(!SBA||APR) return;
+  try{
+    const {data:{session}}=await SBA.auth.getSession(); if(!session) return;
+    const {data:st}=await SBA.rpc('sp_pin_status'); if(!st||!(st.role==='editor'||st.role==='admin')) return;
+    APR={email:session.user.email,mgr:!!st.is_mgr,hasPin:!!st.has_pin};
+    renderApprover();
+  }catch(e){}
+}
+function renderApprover(){
+  const card=$('ap-card'); if(!card) return;
+  if(!APR||!RD||!RD.p){ card.hidden=true; return; }
+  const dates=(RD.dates||[]).filter(d=>RD.last&&d<=RD.last), sel=$('ap-date'), prev=sel.value;
+  sel.innerHTML=dates.map(d=>'<option value="'+d+'">'+esc(fd(d))+'</option>').join('');
+  sel.value=dates.includes(prev)?prev:(RD.last||'');
+  const d=sel.value, ap=(RD.appr||[]).find(x=>x.d===d)||{};
+  const ts=t=>{if(!t)return '';const x=new Date(t);return isNaN(x)?'':' · '+x.getDate()+' '+MON[x.getMonth()]+', '+String(x.getHours()).padStart(2,'0')+'.'+String(x.getMinutes()).padStart(2,'0')};
+  $('ap-who').textContent='Anda masuk sebagai '+APR.email+' ('+(APR.mgr?'Manager · hanya Approval MOD':'Team Leader · hanya Approval TL')+'). Pilih tanggal lalu konfirmasi dengan PIN Anda.'+(APR.hasPin?'':' PIN Anda belum diatur, minta admin mengatur PIN.');
+  $('ap-st').innerHTML='<div><b>Approval TL</b>'+(ap.tl?'✓ Disetujui'+esc(ts(ap.tl_at)):'Belum')+'</div><div><b>Approval MOD</b>'+(ap.mod?'✓ Disetujui'+esc(ts(ap.mod_at)):(ap.tl?'Belum':'Menunggu TL'))+'</div>';
+  const k=APR.mgr?'mod':'tl', ok=!!ap[k];
+  let btn='';
+  if(!d) btn='';
+  else if(!ok){ btn=(k==='mod'&&!ap.tl)?'<button class="btn" disabled>Approve MOD (menunggu TL)</button>':'<button class="btn" data-ap="1">Approve '+k.toUpperCase()+'</button>'; }
+  else if(!(k==='tl'&&ap.mod)) btn='<button class="btn ghost" data-ap="0">Batalkan Approval '+k.toUpperCase()+'</button>';
+  $('ap-btn').innerHTML=btn;
+  card.hidden=false;
+}
+function apErr(r){ const m={nopin:'PIN Anda belum diatur. Minta admin mengatur PIN.',locked:'Terlalu banyak salah. Coba lagi dalam '+(r.wait||5)+' menit.',bad:'PIN salah. Sisa percobaan: '+r.left+'.',role:'Akun Anda tidak punya izin.',role_tl:'Approval TL hanya untuk Team Leader.',role_mod:'Approval MOD hanya untuk Store Manager / Asst Manager.',need_tl:'Approval TL harus dilakukan lebih dulu.',mod_first:'Batalkan Approval MOD lebih dulu.',format:'PIN harus 6 digit angka.'}; return m[r.err]||'Gagal ('+(r.err||'error')+').'; }
+function apPin(on){
+  const d=$('ap-date').value, k=APR.mgr?'mod':'tl', m=/^S(\d+)-/.exec(RD.p.id||''); if(!d||!m) return;
+  let o=$('pin-ov'); if(!o){ o=document.createElement('div'); o.id='pin-ov'; o.className='pinov'; o.addEventListener('click',e=>{ if(e.target===o||(e.target.closest&&e.target.closest('[data-pinx]'))) o.hidden=true; }); document.body.appendChild(o); }
+  o.innerHTML='<div class="pinbox" role="dialog" aria-modal="true"><h3>'+(on?'Approve ':'Batalkan ')+k.toUpperCase()+'</h3><p class="note">'+esc(RD.p.name||RD.p.id)+' · '+esc(fd(d))+'</p><input id="pin-in" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" data-lpignore="true" name="pin-'+Math.random().toString(36).slice(2,7)+'" placeholder="PIN 6 digit"><div class="pinerr" id="pin-err"></div><div class="pinbt"><button class="btn ghost" data-pinx type="button">Batal</button><button class="btn" id="pin-ok" type="button">Konfirmasi</button></div></div>';
+  o.hidden=false; const inp=$('pin-in'); inp.focus(); inp.addEventListener('input',()=>{ inp.value=inp.value.replace(/\D/g,'').slice(0,6); });
+  const go=async()=>{ const v=inp.value.trim(); if(!/^\d{6}$/.test(v)){ $('pin-err').textContent='Masukkan PIN 6 digit.'; return; }
+    $('pin-ok').disabled=true; const {data,error}=await SBA.rpc('sp_approve',{p_store:m[1],p_sales_id:RD.p.id,p_date:d,p_kind:k,p_pin:v,p_on:on}); $('pin-ok').disabled=false;
+    if(error||!data){ $('pin-err').textContent='Gagal menghubungi server. Coba lagi.'; return; }
+    if(!data.ok){ $('pin-err').textContent=apErr(data); inp.value=''; inp.focus(); return; }
+    const r=data.row, i=(RD.appr||[]).findIndex(x=>x.d===d), n={d,tl:r.tl_ok,tl_at:r.tl_at,mod:r.mod_ok,mod_at:r.mod_at};
+    RD.appr=RD.appr||[]; if(i>=0) RD.appr[i]=n; else RD.appr.push(n);
+    o.hidden=true; render(RD); $('ap-msg').textContent=(on?'Approval ':'Pembatalan approval ')+k.toUpperCase()+' '+fd(d)+' tersimpan.'; };
+  $('pin-ok').onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter') go(); };
+}
 function init(){
   if(!SB||!KEY){
     $('login').hidden=false;
@@ -175,6 +222,10 @@ function init(){
     if(!v){showErr('Masukkan kode salesperson Anda.');return}
     load(v,true);
   });
+  initApprover();
+  $('ap-date').addEventListener('change',()=>{ $('ap-msg').textContent=''; renderApprover(); });
+  $('ap-btn').addEventListener('click',e=>{ const b=e.target.closest('button[data-ap]'); if(b) apPin(b.dataset.ap==='1'); });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const o=$('pin-ov'); if(o) o.hidden=true; } });
   $('pop-x').addEventListener('click',closePop);
   $('pop').addEventListener('click',e=>{if(e.target===$('pop'))closePop()});
   document.addEventListener('keydown',e=>{if(e.key==='Escape')closePop()});
