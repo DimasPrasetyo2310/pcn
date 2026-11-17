@@ -591,7 +591,7 @@ async function cardToPng(el){
   const img=new Image();
   await new Promise((ok,no)=>{img.onload=ok;img.onerror=()=>no(new Error('gagal membuat gambar'));img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)});
   const mobile=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent), budget=mobile?16e6:40e6;
-  let sc=Math.max(1,Math.min(3,15000/h,15000/w,Math.sqrt(budget/(w*h))));
+  let sc=Math.max(1,Math.min(4,15000/h,15000/w,Math.sqrt(budget/(w*h))));
   for(;;){
     const cv=document.createElement('canvas'); cv.width=Math.round(w*sc); cv.height=Math.round(h*sc);
     const cx=cv.getContext('2d');
@@ -1180,7 +1180,7 @@ $('rgExcel').addEventListener('click',()=>{
   }catch(e){b.textContent='Gagal membuat Excel'}
   setTimeout(()=>{b.textContent=old},3000);
 });
-$('rgShot').addEventListener('click',()=>runShot($('rgShot'),$('rgView'),1500,'report-closing-region-'+$('waDate').value+'.png'));
+$('rgShot').addEventListener('click',()=>runShot($('rgShot'),$('rgView'),3400,'report-closing-region-'+$('waDate').value+'.png',c=>c.classList.add('rgbig')));
 
 async function saveWa(){
   if(!canWrite||!SB||!WAD) return;
