@@ -1035,7 +1035,7 @@ function buildRg(r,d,act,ly){
   // 2 inventory
   const RGI=[...RGINV.slice(0,9),['MS','Miscellaneous'],...RGINV.slice(9)];
   const inv=RGI.map(([k])=>RGVAL[k]), invT=sum(inv.map(x=>x||0)), anyInv=inv.some(x=>x!=null);
-  h+=tag('VALUE INVENTORY CLASS A')+T('w2',row(th('STORE',1,'st')+RGI.map(([k,nm])=>th(nm.toUpperCase())).join('')+th('TOTAL INV CLASS A'))
+  h+=tag('VALUE INVENTORY CLASS A')+T('w2',row(th('STORE',1,'st')+RGI.map(([k])=>th(({AP:'APP',BT:'BATH',BM:'BM',DW:'DW',EL:'EL',FW:'FW',HW:'HW',HS:'HS HB',KC:'KTC',MS:'MCL',PS:'PS',PL:'PL',TL:'TL'})[k]||k)).join('')+th('TOTAL INV CLASS A'))
     +row(td(ST,'store')+inv.map(x=>td(n2(x),'num')).join('')+td(anyInv?n2(invT):'-','num'))+row(td('TOTAL','tot')+inv.map(x=>td(n(x),'tot num')).join('')+td(anyInv?n(invT):'-','tot num')));
   // 3 DSL
   const pd=clVal('clPdd'), ot=clVal('clOt'), rs=['rgRi','rgRt','rgRk','rgRd','rgRs','rgRl'].map(i=>clVal(i)), rsT=sum(rs.map(x=>x||0));
