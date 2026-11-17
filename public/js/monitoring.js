@@ -240,6 +240,15 @@ function toISO(v){
 function parseSheet(f,sh,sn){
   const rows=XLSX.utils.sheet_to_json(sh,{header:1,raw:true,defval:null});
   const src=f.name+' / '+sn;
+  const ph=rows.slice(0,5).findIndex(r=>r&&r.some(x=>/^is\s*pareto\s*$/i.test(String(x==null?'':x).trim())));
+  if(ph>=0){
+    const ip=rows[ph].findIndex(x=>/^is\s*pareto\s*$/i.test(String(x==null?'':x).trim())), seen=new Map();
+    rows.slice(ph+1).forEach(r=>{if(!r)return;const mn=String(r[0]==null?'':r[0]).trim().replace(/\.0+$/,'');if(!/^\d{8,16}$/.test(mn))return;
+      const fl=String(r[ip]==null?'':r[ip]).trim(); if(!/pareto/i.test(fl)||/^(non|bukan|tidak)/i.test(fl))return;
+      seen.set(mn,typeof r[1]==='number'?Math.round(r[1]):null)});
+    if(!seen.size) throw new Error('tidak ada member pareto yang terbaca (kolom pertama nomor member, kolom IS PARETO terisi PARETO)');
+    return {kind:'pareto',name:src,rows:[...seen].map(([mn,a])=>({store_code:STORE,member_no:mn,ref_amount:a}))};
+  }
   let h=rows.findIndex(r=>r&&r[0]==='Date'&&r.some(x=>String(x).trim()==='Sales Exclude Tax (NAV)'));
   if(h>=0){
     const hd=rows[h].map(x=>String(x==null?'':x).trim());
@@ -267,7 +276,7 @@ function parseSheet(f,sh,sn){
     const VALIDCAT=new Set(Object.keys(ZONA)), numLike=v=>/^-?[\d.,]+$/.test(String(v==null?'':v).trim());
     const catOf=r=>{const v=r[ic]==null?'':String(r[ic]).trim(); if(!v||!numLike(v)) return r[ic]; for(const i of [iSub,iFn,iSf]){if(i>=0&&r[i]!=null&&VALIDCAT.has(String(r[i]).trim().toUpperCase()))return String(r[i]).trim()} return r[ic]};
     const DIMOK={source:['stationary','whatsapp','sales project'],typebrand:['non private brand','private brand','exclusive brand']};
-    const irc=hx('Receipt No','Receipt No.','Receipt Number','No Receipt','Invoice No'), rcp=new Map();
+    const irc=hx('Receipt No','Receipt No.','Receipt Number','No Receipt','Invoice No'), rcp=new Map(), imc=hx('Membercard No','Membercard No.','Member No','Member Card No'), mag=new Map();
     let badRows=0, allRows=0;
     rows.slice(h+1).forEach(r=>{const d=toISO(r[0]);if(!d||typeof r[ia]!=='number'||!catOf(r))return;
       if(is>=0&&r[is]!=null&&String(r[is]).trim()!==STORE){other++;return}
@@ -278,6 +287,7 @@ function parseSheet(f,sh,sn){
         /* Master Brand harus nama merek: bukan angka, dan bukan isi kolom Sub Category/Function/Sub Function (tanda kolom bergeser) */
         if(!VALIDCAT.has(String(catOf(r)).trim().toUpperCase())||!DIMOK.source.includes(sv)||!DIMOK.typebrand.includes(tv)||numLike(mb)||(mb&&(mb===nm(iSub)||mb===nm(iFn)||mb===nm(iSf)))){badRows++;return}}
       const k=d+'|'+catOf(r);m.set(k,(m.get(k)||0)+r[ia]);n++;
+      if(imc>=0&&r[imc]!=null){const mn=String(r[imc]).trim().replace(/\.0+$/,'');if(/^\d{8,16}$/.test(mn)){const mk=d+'|'+mn;let e=mag.get(mk);if(!e){e={r:new Set(),s:0};mag.set(mk,e)}e.s+=r[ia];if(irc>=0&&r[irc]!=null&&String(r[irc]).trim()!=='')e.r.add(String(r[irc]).trim())}}
       if(iNo>=0&&tx(r,iNo)){const ik=JSON.stringify([d,catOf(r),(tx(r,ib).toUpperCase()||'LAINNYA'),tx(r,iNo).replace(/^0+(?=\d)/,'')]);let e=items.get(ik);if(!e){e={nm:tx(r,iNm),s:0,q:0,n:0};items.set(ik,e)}e.s+=r[ia];e.q+=(iQty>=0&&typeof r[iQty]==='number')?r[iQty]:0;e.n++}
       {const ck=JSON.stringify([d,catOf(r),tx(r,iSub),tx(r,iFn),tx(r,iSf),tx(r,ib),tx(r,iBr),tx(r,isr),tx(r,itb)]);let e=cube.get(ck);if(!e){e={s:0,i:0,q:0,n:0};cube.set(ck,e)}e.s+=r[ia];e.i+=(iInc>=0&&typeof r[iInc]==='number')?r[iInc]:0;e.q+=(iQty>=0&&typeof r[iQty]==='number')?r[iQty]:0;e.n++}
       const addD=(dim,ix)=>{if(ix<0)return;const dv=(String(r[ix]==null?'':r[ix]).trim()||'Lainnya');if(!DIMOK[dim].includes(dv.toLowerCase()))return;const dk=d+'|'+dim+'|'+dv;dmap.set(dk,(dmap.get(dk)||0)+r[ia])};addD('source',isr);addD('typebrand',itb);
@@ -286,8 +296,10 @@ function parseSheet(f,sh,sn){
     if(allRows&&badRows/allRows>0.01) throw new Error('DITOLAK: '+nf.format(badRows)+' dari '+nf.format(allRows)+' baris ('+dec(badRows/allRows*100,1)+'%) tidak sesuai template (Category, Source Type Name, atau Master Type Brand tidak dikenal). Perbaiki file lalu unggah ulang');
     if(badRows) badRowsNote(src,badRows,allRows);
     rcp.forEach((st,k)=>dmap.set(k,st.size));
-    if(irc<0) BADNOTE.push(src+': tanpa kolom Receipt No, jumlah invoice per source type (WhatsApp) tetap diisi manual');
-    return {kind:'detail',name:src,n,items:[...items].map(([k,e])=>{const a=JSON.parse(k);return {store_code:STORE,sale_date:a[0],category:a[1],master_brand:a[2],item_no:a[3],item_name:e.nm,qty:Math.round(e.q*100)/100,sales:Math.round(e.s),lines:e.n,source:src}}),cube:[...cube].map(([k,e])=>{const a=JSON.parse(k);return {store_code:STORE,sale_date:a[0],category:a[1],sub_category:a[2],func:a[3],sub_func:a[4],master_brand:a[5],brand:a[6],source_type:a[7],master_type_brand:a[8],sales:Math.round(e.s),sales_incl:Math.round(e.i),qty:Math.round(e.q*100)/100,lines:e.n,source:src}}),dims:[...dmap].map(([k,v])=>{const p=k.split('|');return {store_code:STORE,sale_date:p[0],dim:p[1],dim_value:p[2],sales:Math.round(v),source:src}}),brands:[...bm].map(([k,v])=>{const p=k.split('|');return {store_code:STORE,sale_date:p[0],category:p[1],master_brand:p[2],sales:Math.round(v.s),qty:Math.round(v.q*100)/100,source:src}}),rows:[...m].map(([k,v])=>{const p=k.split('|');return {store_code:STORE,sale_date:p[0],category:p[1],sales:Math.round(v),source:src}})};
+    if(irc<0) BADNOTE.push(src+': tanpa kolom Receipt No, jumlah invoice per source type (WhatsApp) dan invoice member pareto tidak bisa dihitung otomatis');
+    if(imc<0) BADNOTE.push(src+': tanpa kolom Membercard No, sales dan invoice member pareto tidak bisa dihitung');
+    const members=[...mag].map(([k,e])=>{const p=k.split('|');return {store_code:STORE,sale_date:p[0],member_no:p[1],receipts:e.r.size||(irc<0?1:0),sales:Math.round(e.s),source:src}});
+    return {kind:'detail',name:src,n,members,items:[...items].map(([k,e])=>{const a=JSON.parse(k);return {store_code:STORE,sale_date:a[0],category:a[1],master_brand:a[2],item_no:a[3],item_name:e.nm,qty:Math.round(e.q*100)/100,sales:Math.round(e.s),lines:e.n,source:src}}),cube:[...cube].map(([k,e])=>{const a=JSON.parse(k);return {store_code:STORE,sale_date:a[0],category:a[1],sub_category:a[2],func:a[3],sub_func:a[4],master_brand:a[5],brand:a[6],source_type:a[7],master_type_brand:a[8],sales:Math.round(e.s),sales_incl:Math.round(e.i),qty:Math.round(e.q*100)/100,lines:e.n,source:src}}),dims:[...dmap].map(([k,v])=>{const p=k.split('|');return {store_code:STORE,sale_date:p[0],dim:p[1],dim_value:p[2],sales:Math.round(v),source:src}}),brands:[...bm].map(([k,v])=>{const p=k.split('|');return {store_code:STORE,sale_date:p[0],category:p[1],master_brand:p[2],sales:Math.round(v.s),qty:Math.round(v.q*100)/100,source:src}}),rows:[...m].map(([k,v])=>{const p=k.split('|');return {store_code:STORE,sale_date:p[0],category:p[1],sales:Math.round(v),source:src}})};
   }
   const yr=(sn.match(/20\d\d/)||[String(new Date().getFullYear())])[0];
   const MI=['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'], ALT={MEI:'MAY',AGU:'AUG',AGS:'AUG',OKT:'OCT',DES:'DEC'};
@@ -334,17 +346,17 @@ async function parseFile(f){
 async function unchangedDates(r){
   const dates=[...new Set(r.rows.map(x=>x.sale_date))];
   const sm=(a,k)=>a.reduce((t,x)=>t+(+x[k]||0),0), by=(a)=>{const m={};a.forEach(x=>{(m[x.sale_date]=m[x.sale_date]||[]).push(x)});return m};
-  const fc=by(r.rows), fi=by(r.items||[]), fb=by(r.brands||[]), fdm=by(r.dims||[]), fx=by(r.cube||[]);
+  const fc=by(r.rows), fi=by(r.items||[]), fb=by(r.brands||[]), fdm=by(r.dims||[]), fx=by(r.cube||[]), fm=by(r.members||[]);
   const same=new Set();
   let nx=0;
   const one=async d=>{
     try{
       const q=(t,c)=>SB.from(t).select(c).eq('store_code',STORE).eq('sale_date',d).limit(1000);
       const cnt=t=>SB.from(t).select('sale_date',{count:'exact',head:true}).eq('store_code',STORE).eq('sale_date',d);
-      const [c,b,m,ci,cx]=await Promise.all([q('store_day_category','sales'),q('store_day_brand','sales'),q('store_day_dim','dim,sales'),cnt('store_day_item'),cnt('store_day_detail')]);
-      if(c.error||b.error||m.error||ci.error||cx.error) return;
+      const [c,b,m,ci,cx,cm]=await Promise.all([q('store_day_category','sales'),q('store_day_brand','sales'),q('store_day_dim','dim,sales'),cnt('store_day_item'),cnt('store_day_detail'),cnt('store_day_member')]);
+      if(c.error||b.error||m.error||ci.error||cx.error||cm.error) return;
       const ds=(m.data||[]).filter(x=>x.dim==='source'), fds=(fdm[d]||[]).filter(x=>x.dim==='source');
-      const ok=Math.abs(sm(c.data,'sales')-sm(fc[d]||[],'sales'))<2 && Math.abs(sm(b.data,'sales')-sm(fb[d]||[],'sales'))<2 && Math.abs(sm(ds,'sales')-sm(fds,'sales'))<2 && (ci.count||0)===(fi[d]||[]).length && (cx.count||0)===(fx[d]||[]).length && c.data.length===(fc[d]||[]).length;
+      const ok=Math.abs(sm(c.data,'sales')-sm(fc[d]||[],'sales'))<2 && Math.abs(sm(b.data,'sales')-sm(fb[d]||[],'sales'))<2 && Math.abs(sm(ds,'sales')-sm(fds,'sales'))<2 && (ci.count||0)===(fi[d]||[]).length && (cx.count||0)===(fx[d]||[]).length && (cm.count||0)===(fm[d]||[]).length && c.data.length===(fc[d]||[]).length;
       if(ok) same.add(d);
     }catch(e){}
   };
@@ -519,21 +531,27 @@ async function doUpload(files){
   for(const r of ok){
     try{
       if(r.kind==='nav'){await upsertChunks('store_daily',r.rows,'store_code,sale_date');parts.push('Report Compare FFC dan NAV: '+r.rows.length+' hari')}
+      else if(r.kind==='pareto'){
+        const stamp=new Date().toISOString(); r.rows.forEach(x=>x.uploaded_at=stamp);
+        await upsertChunks('store_pareto_member',r.rows,'store_code,member_no');
+        const {error:e1}=await SB.from('store_pareto_member').delete().eq('store_code',STORE).lt('uploaded_at',stamp);if(e1)throw e1;
+        parts.push('Database member pareto: '+nf.format(r.rows.length)+' member (daftar lama diganti)');PARC.clear()}
       else if(r.kind==='budget'){await upsertChunks('store_budget_monthly',r.rows,'store_code,year,month,category');parts.push('Budget '+r.year+': '+r.rows.length+' angka bulanan')}
       else if(r.kind==='kpibudget'){await upsertChunks('store_budget_kpi_daily',r.rows,'store_code,budget_date');parts.push('Budget traffic, invoice, basket, protection '+r.month+': '+r.rows.length+' hari')}
       else if(r.kind==='phasing'){await upsertChunks('store_budget_phasing',r.rows,'store_code,phase_date');parts.push('Budget harian '+r.month+': '+r.rows.length+' hari')}
       else{
         const same=await unchangedDates(r), keep=x=>!same.has(x.sale_date), total=new Set(r.rows.map(x=>x.sale_date)).size;
-        if(same.size) {r.rows=r.rows.filter(keep);r.items=(r.items||[]).filter(keep);r.cube=(r.cube||[]).filter(keep);r.dims=(r.dims||[]).filter(keep);r.brands=(r.brands||[]).filter(keep)}
+        if(same.size) {r.rows=r.rows.filter(keep);r.items=(r.items||[]).filter(keep);r.cube=(r.cube||[]).filter(keep);r.dims=(r.dims||[]).filter(keep);r.brands=(r.brands||[]).filter(keep);r.members=(r.members||[]).filter(keep)}
         if(!r.rows.length){parts.push('Detail penjualan: semua '+total+' hari sudah sama dengan database, tidak ada yang perlu disimpan');continue}
         await upsertChunks('store_day_category',r.rows,'store_code,sale_date,category');parts.push('Detail penjualan: '+nf.format(r.n)+' baris, '+total+' hari'+(same.size?' ('+same.size+' hari tidak berubah dilewati, '+new Set(r.rows.map(x=>x.sale_date)).size+' hari diperbarui)':''));
         if(r.items&&r.items.length){await upsertChunks('store_day_item',r.items,'store_code,sale_date,category,master_brand,item_no');parts.push('Detail item: '+nf.format(r.items.length)+' data')}
         if(r.cube&&r.cube.length){await upsertChunks('store_day_detail',r.cube,'store_code,sale_date,category,sub_category,func,sub_func,master_brand,brand,source_type,master_type_brand');parts.push('Arsip detail lengkap: '+nf.format(r.cube.length)+' data')}
         if(r.dims&&r.dims.length){await upsertChunks('store_day_dim',r.dims,'store_code,sale_date,dim,dim_value');parts.push('Source type dan master type brand: '+nf.format(r.dims.length)+' data')}
         if(r.brands&&r.brands.length){await upsertChunks('store_day_brand',r.brands,'store_code,sale_date,category,master_brand');parts.push('Master brand: '+nf.format(r.brands.length)+' data')}
+        if(r.members&&r.members.length){await upsertChunks('store_day_member',r.members,'store_code,sale_date,member_no');parts.push('Data member per hari: '+nf.format(r.members.length)+' data');PARC.clear()}
         /* Ganti total: sisa data lama pada tanggal yang sama (dari file/unggahan sebelumnya) dihapus agar database tidak menumpuk */
         try{const ds=[...new Set(r.rows.map(x=>x.sale_date))];let gone=0;
-          for(const t of ['store_day_category','store_day_brand','store_day_item','store_day_detail','store_day_dim']){
+          for(const t of ['store_day_category','store_day_brand','store_day_item','store_day_detail','store_day_dim','store_day_member']){
             const {data}=await SB.from(t).delete().eq('store_code',STORE).in('sale_date',ds).neq('source',r.name).select('sale_date');gone+=(data||[]).length}
           if(gone) parts.push('Data lama yang digantikan dibersihkan: '+nf.format(gone)+' baris')}catch(e){}}
     }catch(err){bad.push(r.name+': '+explain(err))}
@@ -987,6 +1005,14 @@ if($('kcFrom')){$('kcFrom').addEventListener('change',e=>{if(!e.target.value)ret
 if($('kcShot')) $('kcShot').addEventListener('click',()=>runShot($('kcShot'),$('kcCard'),1000,'kpi-commercial-'+(KCR.to||'')+'.png'))
 
 /* Daily Report Closing Region 1 (tabel, bisa disalin sebagai gambar) */
+const PARC=new Map();
+async function parLoad(d){
+  PARC.set(d,null);
+  try{const {data,error}=await SB.rpc('pareto_summary',{p_store:STORE,p_from:d.slice(0,8)+'01',p_to:d});
+    if(error){PARC.delete(d);return}
+    PARC.set(d,data||[]); if($('waDate')&&$('waDate').value===d) buildCl();
+  }catch(e){PARC.delete(d)}
+}
 function buildRg(r,d,act,ly){
   const y=+d.slice(0,4), m=+d.slice(5,7), day=+d.slice(8), bud=budgetDay(d), kb=KB.get(d)||{};
   const n2=x=>x==null||isNaN(x)?'-':x.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}), n=x=>x==null||isNaN(x)?'-':en(x), p0=x=>x==null||!isFinite(x)?'-':Math.round(x*100)+'%', p2=x=>x==null||!isFinite(x)?'-':(x*100).toFixed(2)+'%';
@@ -1017,10 +1043,18 @@ function buildRg(r,d,act,ly){
     +row(td('PCN','store')+dc(dslc))+row(td('TOTAL','tot')+dc(dslc).replace(/class="num/g,'class="tot num')));
   // 4 project / member / waiting
   const pj=dm('source','Sales Project'), mr=waVal('waMa'), mn=v('rgMn'), sm=clVal('clSm');
-  const mem=[n(pj),p2(act?pj/act:null),n(mr),n(mn),p0(mr&&mn!=null?mn/mr:null),n(sm),p2(act&&sm!=null?sm/act:null),v('rgWt')||'-',n(v('rgDr')),n(v('rgW10'))];
-  const mc=c=>c.map((x,i)=>td(x,'num'+(i===1||i===4||i===6?' acv':''))).join('');
-  h+=tag('SALES PROJECT, MEMBER, WATING TIME')+T('w4',row(th('Store Name',1,'st')+th('Sales project',2)+th('MEMBER',5)+th('Waiting time',3))+row(th('')+['Actual Project','Contribusi','Member registrasi','New member transaksi','NEMS','Sales new member','Cont sales new member','Rata rata waktu tunggu','Total DR','> 10 MENIT'].map(x=>th(x)).join(''))
+  if(!PARC.has(d)) parLoad(d);
+  const pr0=PARC.get(d), pr=pr0&&pr0.length?pr0:null, pf=d.slice(0,8)+'01', mtdStore=sum(DATA.D.filter(x=>x.d>=pf&&x.d<=d).map(x=>x.sx));
+  const pDay=pr?pr.find(x=>x.sale_date===d):null, pInv=pr?(pDay?pDay.invoice:0):null, pSal=pr?(pDay?+pDay.sales:0):null;
+  const pInvM=pr?sum(pr.map(x=>+x.invoice)):null, pSalM=pr?sum(pr.map(x=>+x.sales)):null;
+  const mem=[n(pj),p2(act?pj/act:null),n(mr),n(mn),p0(mr&&mn!=null?mn/mr:null),n(sm),p2(act&&sm!=null?sm/act:null),
+    n(pInv),n(pSal),p2(pr&&act?pSal/act:null),n(pInvM),n(pSalM),p2(pr&&mtdStore?pSalM/mtdStore:null),mtdStore?n(mtdStore):'-'];
+  const mc=c=>c.map((x,i)=>td(x,'num'+(i===1||i===4||i===6||i===9||i===12?' acv':''))).join('');
+  h+=tag('SALES PROJECT, MEMBER, CUST PARETO')+T('w4',row(th('Store Name',1,'st')+th('Sales project',2)+th('MEMBER',5)+th('Customer pareto Daily',3)+th('Customer pareto MTD',4))+row(th('')+['Actual Project','Contribusi','Member registrasi','New member transaksi','NEMS','Sales new member','Cont sales new member','Invoice','Sales','Ctr sales to store','Invoice','Sales','Ctr sales to store','MTD Sales Store'].map(x=>th(x)).join(''))
     +row(td('PCN','store')+mc(mem))+row(td('Total','tot')+mc(mem).replace(/class="num/g,'class="tot num')));
+  const wt=[v('rgWt')||'-',n(v('rgDr')),n(v('rgW10'))], wc=c=>c.map(x=>td(x,'num')).join('');
+  h+=tag('WATING TIME')+T('w4',row(th('Store Name',1,'st')+th('Waiting time',3))+row(th('')+['Rata rata waktu tunggu','Total DR','> 10 MENIT'].map(x=>th(x)).join(''))
+    +row(td('PCN','store')+wc(wt))+row(td('Total','tot')+wc(wt).replace(/class="num/g,'class="tot num')));
   // 5 protection
   const pa=waVal('waQa'), pb=kb.pq;
   h+=tag('MITRA10 PROTECTION')+T('w5',row(th('Store Name',1,'st')+th('MITRA10 PROTECTION',3))+row(th('')+th('ACTUAL')+th('BUDGET')+th('MTD'))
