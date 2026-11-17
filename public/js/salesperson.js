@@ -64,7 +64,7 @@ function render(r){
     if(!fut){ tInv+=inv; tBca+=m.bca; mA+=a; mMB+=m.mb; mCat+=m.cat; if(w) mB+=b; }
     const pp=(w&&b>0&&!fut)?a/b*100:null;
     const today=last&&d===last;
-    const ap=apr[d]||{}, autoM=!ap.mod&&pp!=null&&pp>=AUTO_MOD;
+    const ap=apr[d]||{}, autoM=!ap.mod&&ap.tl&&pp!=null&&pp>=AUTO_MOD;
     rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td><td'+(fut||!a?'':' class="clk" data-d="'+d+'" title="Lihat item"')+'>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td><td>'+(fut?'':inv)+'</td><td>'+(fut?'':m.bca)+'</td><td class="c">'+(fut?'':ck(ap.tl,ap.tl_at,ap.tl_by))+'</td><td class="c">'+(fut?'':(autoM?'<span class="ok" title="Auto Approved: pencapaian harian '+esc(pct(pp))+' (≥ '+AUTO_MOD+'%)">✓</span><div class="by">Auto</div>':ck(ap.mod,ap.mod_at,ap.mod_by)))+'</td></tr>';
   });
   const mp=mB>0?mA/mB*100:null;
@@ -179,16 +179,17 @@ function renderApprover(){
   const d=apDay(), ap=(RD.appr||[]).find(x=>x.d===d)||{};
   const ts=t=>{if(!t)return '';const x=new Date(t);return isNaN(x)?'':' · '+x.getDate()+' '+MON[x.getMonth()]+', '+String(x.getHours()).padStart(2,'0')+'.'+String(x.getMinutes()).padStart(2,'0')};
   $('ap-who').textContent='Hari H: '+fd(d)+'. Team Leader / Manager: tekan tombol, pilih nama Anda, lalu masukkan PIN Anda sendiri di HP ini.';
-  const dp=dayPct(d), auto=!ap.mod&&dp!=null&&dp>=AUTO_MOD;
+  const dp=dayPct(d), auto=!ap.mod&&ap.tl&&dp!=null&&dp>=AUTO_MOD, pend=!ap.mod&&!ap.tl&&dp!=null&&dp>=AUTO_MOD;
   const col=(k)=>{ const ok=!!ap[k]||(k==='mod'&&auto), lock=(k==='tl'&&ap.mod), has=(APR[k]||[]).length>0;
     if(k==='mod'&&auto) return '<div class="apok"><small>Approval MOD</small><b>✓ Auto Approved</b><span class="note">Pencapaian harian '+esc(pct(dp))+' (≥ '+AUTO_MOD+'%), tidak perlu PIN.</span></div>';
     const st=ok?'✓ Disetujui oleh '+esc(ap[k+'_by']||'?')+esc(ts(ap[k+'_at'])):(k==='mod'&&!ap.tl?'Menunggu Approval TL':'Belum');
+    const hint=(k==='mod'&&pend)?'<span class="note">Pencapaian harian '+esc(pct(dp))+' (≥ '+AUTO_MOD+'%): otomatis disetujui setelah TL approve.</span>':'';
     let btn;
     if(ok) btn=lock?'':'<button class="btn ghost" data-ap="0" data-k="'+k+'">Batalkan Approval '+k.toUpperCase()+'</button>';
     else if(!has) btn='<button class="btn" disabled>Belum ada PIN '+k.toUpperCase()+'</button>';
     else if(k==='mod'&&!ap.tl) btn='<button class="btn" disabled>Approve MOD (menunggu TL)</button>';
     else btn='<button class="btn" data-ap="1" data-k="'+k+'">Approve '+k.toUpperCase()+'</button>';
-    return '<div class="'+(ok?'apok':'apno')+'"><small>Approval '+(k==='tl'?'TL':'MOD')+'</small><b>'+st+'</b>'+btn+'</div>'; };
+    return '<div class="'+(ok?'apok':'apno')+'"><small>Approval '+(k==='tl'?'TL':'MOD')+'</small><b>'+st+'</b>'+hint+btn+'</div>'; };
   $('ap-grid').innerHTML=col('tl')+col('mod');
   card.hidden=false;
 }

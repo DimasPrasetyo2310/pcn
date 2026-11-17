@@ -779,7 +779,7 @@ function spList(all0,last,noFetch){
   const L=all0.filter(e=>(!spZ||e.zona===spZ)&&(!spShift.length||spShift.includes(e.c[i])));
   let tb=0,ta=0,nTl=0,nMod=0,rows='';
   L.forEach(e0=>{ const e=SCHM[e0.id]||e0, c=e.c[i], w=isWork(c), b=w?(e.tpe||0):0, q=idx[e.id], a=q?(+q.sales||0):0, pp=(w&&b>0&&dd)?a/b*100:null, ap=(spAppr[e.id]||{})[ld]||{};
-    const autoM=!ap.mod_ok&&pp!=null&&pp>=100; tb+=b; ta+=a; if(ap.tl_ok) nTl++; if(ap.mod_ok||autoM) nMod++;
+    const autoM=!ap.mod_ok&&ap.tl_ok&&pp!=null&&pp>=100; tb+=b; ta+=a; if(ap.tl_ok) nTl++; if(ap.mod_ok||autoM) nMod++;
     rows+='<tr class="'+(!w?'off':'')+(e.id===spSel?' cur':'')+'"><td><b>'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id.replace(/^S\d+-0*/,''))+'</span></td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td>'+(dd?nn(a):'')+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td>'+(noAp?'':(PINM?pb('tl',e.id,ap,canAp&&!spMgr):ab('tl',e.id,ap,canAp&&!spMgr))+(autoM?'<td class="c" title="Auto Approved: pencapaian harian ≥ 100%"><span class="spg">✓</span> <small>Auto</small></td>':(PINM?pb('mod',e.id,ap,canAp&&spMgr):ab('mod',e.id,ap,canAp&&spMgr&&(ap.tl_ok||ap.mod_ok)))))+'</tr>'; });
   rows+='<tr class="tt"><td>TOTAL ('+L.length+' salesperson)</td><td></td><td>'+nn(tb)+'</td><td>'+(dd?nn(ta):'')+'</td><td>'+(dd&&tb>0?pc(ta/tb*100):'')+'</td>'+(noAp?'':'<td class="c">'+nTl+'/'+L.length+'</td><td class="c">'+nMod+'/'+L.length+'</td>')+'</tr>';
   box.innerHTML='<div class="spv"><b>Validasi harian per salesperson</b> <span class="note">Tanggal '+esc(fd(ld,{weekday:'short',day:'numeric',month:'short',year:'numeric'}))+(dd?'':' · belum ada data penjualan')+' · ubah lewat filter tanggal</span>'+
