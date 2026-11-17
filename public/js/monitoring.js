@@ -842,9 +842,9 @@ const pad2=n=>String(n).padStart(2,'0');
 let WAQ=null, WAM=0, WSP=null;
 // Value inventory Class A: angka tetap (permanen)
 const RGVAL={AP:853112424.18,BT:1777219291.35,BM:476637964.89,DW:250966869.14,EL:906010979.28,FW:1212636161.43,HW:95061808.9,HS:17249138.36,KC:283096061.84,PS:3792603075.41,PL:902919696.79,TL:311040361.83};
-const RGK=['rgMr', 'rgMn', 'rgWt', 'rgDr', 'rgW10', 'rgP2', 'rgO2', 'rgRi', 'rgRk', 'rgRd', 'rgRs', 'rgRl', 'rgSa', 'rgS2'], RGINV=[["AP", "Appliances"], ["BT", "Bathroom"], ["BM", "Building Material"], ["DW", "Doors And Windows"], ["EL", "Electrical And Lighting"], ["FW", "Flooring And Wall"], ["HW", "Hardware"], ["HS", "Houseware & Hobbies"], ["KC", "Kitchen"], ["PS", "Paint And Sundries"], ["PL", "Plumbing"], ["TL", "Tools"]];
+const RGK=['rgMr', 'rgMn', 'rgWt', 'rgDr', 'rgW10', 'rgP2', 'rgO2', 'rgRi', 'rgRk', 'rgRd', 'rgRs', 'rgRl', 'rgSa', 'rgS2', 'rgDmPd', 'rgDmOt', 'rgDmLate', 'rgGw', 'rgGd', 'rgG10', 'rgMd', 'rgM10'], RGINV=[["AP", "Appliances"], ["BT", "Bathroom"], ["BM", "Building Material"], ["DW", "Doors And Windows"], ["EL", "Electrical And Lighting"], ["FW", "Flooring And Wall"], ["HW", "Hardware"], ["HS", "Houseware & Hobbies"], ["KC", "Kitchen"], ["PS", "Paint And Sundries"], ["PL", "Plumbing"], ["TL", "Tools"]];
 const CLK=['clTt','clIt','clBt','clSm','clWi','clPdd','clOt','clD0','clD1','clD2','clD3','clLate',...RGK];
-const clVal=id=>{const e=$(id);if(id==='clLate'||id==='rgWt')return e.value.trim();return e.value===''?null:+e.value};
+const clVal=id=>{const e=$(id);if(id==='clLate'||id==='rgWt'||id==='rgGw')return e.value.trim();return e.value===''?null:+e.value};
 const WAK=[['waFfc','traffic_manual'],['waQt','prot_qty_t'],['waQa','prot_qty_a'],['waMt','member_t'],['waMa','member_a']];
 let WAD=null, WAT=null;
 function waVal(id){const v=$(id).value;return v===''?null:+v}
@@ -1037,9 +1037,10 @@ function buildRg(r,d,act,ly){
   // 3 service level
   const pd=clVal('clPdd'), ot=clVal('clOt'), dxs=[clVal('clD0'),clVal('clD1'),clVal('clD2')].filter(x=>x!=null), p2d=dxs.length?sum(dxs):null, o2d=p2d;
   const rs=['rgRi','rgRk','rgRd','rgRs','rgRl'].map(i=>v(i)), rsT=sum(rs.map(x=>x||0));
-  const dslc=[n(pd),n(ot),p2(pd&&ot!=null?ot/pd:null),n(p2d),n(o2d),p2(pd&&p2d!=null?p2d/pd:null),p2(p2d&&o2d!=null?o2d/p2d:null),...rs.map(n),rs.some(x=>x!=null)?n(rsT):'-'];
-  const dc=c=>c.map((x,i)=>td(x,'num'+(i===2||i===5||i===6?' acv':''))).join('');
-  h+='<div class="rgsp"></div>'+T('w3',row(th('STORE',1,'st')+th('TOTAL',3)+th('TWO DAYS DELIVERY (0-2 Hari)',4)+th('Reason keterlambatan',5)+th('Total'))+row(th('')+['PD','OT','Service level','PD','OT','CONT','Service level','Internal','Req kons','Dc','Supp','Lain 2',''].map(x=>th(x)).join(''))
+  const dslc=[n(pd),n(ot),p2(pd&&ot!=null?ot/pd:null),n(p2d),n(o2d),p2(pd&&p2d!=null?p2d/pd:null),p2(p2d&&o2d!=null?o2d/p2d:null),...rs.map(n),rs.some(x=>x!=null)?n(rsT):'-',...dsl];
+  const dmP=clVal('rgDmPd'), dmO=clVal('rgDmOt'), dmL=clVal('rgDmLate'), dsl=[n(dmP),n(dmO),n(dmL),p2(dmP&&dmO!=null?dmO/dmP:null),p2(dmP&&dmL!=null?(dmP-dmL)/dmP:null)];
+  const dc=c=>c.map((x,i)=>td(x,'num'+(i===2||i===5||i===6||i===16||i===17?' acv':''))).join('');
+  h+='<div class="rgsp"></div>'+T('w3',row(th('STORE',1,'st')+th('TOTAL',3)+th('TWO DAYS DELIVERY (0-2 Hari)',4)+th('Reason keterlambatan',5)+th('Total')+th('DSL MTD',5))+row(th('')+['PD','OT','Service level','PD','OT','CONT','Service level','Internal','Req kons','Dc','Supp','Lain 2','','PD','OT ALL','LATE RC','% DSL ALL','% DSL RC'].map(x=>th(x)).join(''))
     +row(td('PCN','store')+dc(dslc))+row(td('TOTAL','tot')+dc(dslc).replace(/class="num/g,'class="tot num')));
   // 4 project / member / waiting
   const pj=dm('source','Sales Project'), mr=waVal('waMa'), mn=v('rgMn'), sm=clVal('clSm');
@@ -1052,8 +1053,14 @@ function buildRg(r,d,act,ly){
   const mc=c=>c.map((x,i)=>td(x,'num'+(i===1||i===4||i===6||i===9||i===12?' acv':''))).join('');
   h+=tag('SALES PROJECT, MEMBER, CUST PARETO')+T('w4',row(th('Store Name',1,'st')+th('Sales project',2)+th('MEMBER',5)+th('Customer pareto Daily',3)+th('Customer pareto MTD',4))+row(th('')+['Actual Project','Contribusi','Member registrasi','New member transaksi','NEMS','Sales new member','Cont sales new member','Invoice','Sales','Ctr sales to store','Invoice','Sales','Ctr sales to store','MTD Sales Store'].map(x=>th(x)).join(''))
     +row(td('PCN','store')+mc(mem))+row(td('Total','tot')+mc(mem).replace(/class="num/g,'class="tot num')));
-  const wt=[v('rgWt')||'-',n(v('rgDr')),n(v('rgW10'))], wc=c=>c.map(x=>td(x,'num')).join('');
-  h+=tag('WATING TIME')+T('w4',row(th('Store Name',1,'st')+th('Waiting time',3))+row(th('')+['Rata rata waktu tunggu','Total DR','> 10 MENIT'].map(x=>th(x)).join(''))
+  const tsec=x=>{const m=String(x||'').trim().match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);return m?+m[1]*3600+ +m[2]*60+(+m[3]||0):null}, tfmt=x=>{if(x==null||!isFinite(x))return '-';x=Math.round(x);return Math.floor(x/3600)+':'+pad2(Math.floor(x%3600/60))+':'+pad2(x%60)};
+  const ach=(dr,t)=>dr>0&&t!=null?p2(1-t/dr):'-';
+  const pw=clVal('rgWt'), pdr=clVal('rgDr'), p10=clVal('rgW10'), gw=clVal('rgGw'), gdr=clVal('rgGd'), g10=clVal('rgG10'), mdr=clVal('rgMd'), m10=clVal('rgM10');
+  const anyW=pdr!=null||gdr!=null, tdr=anyW?(pdr||0)+(gdr||0):null, t10=(p10!=null||g10!=null)?(p10||0)+(g10||0):null;
+  const sp=tsec(pw), sg=tsec(gw); let tav=null;
+  if(sp!=null&&sg!=null&&(pdr||0)+(gdr||0)>0) tav=(sp*(pdr||0)+sg*(gdr||0))/((pdr||0)+(gdr||0)); else if(sp!=null&&sg==null) tav=sp; else if(sg!=null&&sp==null) tav=sg;
+  const wt=[pw||'-',n(pdr),n(p10),ach(pdr,p10),gw||'-',n(gdr),n(g10),ach(gdr,g10),tfmt(tav),n(tdr),n(t10),ach(tdr,t10),n(mdr),n(m10),ach(mdr,m10)], wc=c=>c.map((x,i)=>td(x,'num'+(i===3||i===7||i===11||i===14?' acv':''))).join('');
+  h+=tag('WATING TIME')+T('w4 w7',row(th('Store Name',1,'st')+th('AWT PND DAILY',4)+th('AWT GUDANG DAILY',4)+th('TOTAL AWT PND &amp; GUDANG DAILY',4)+th('TOTAL AWT PND &amp; GUDANG MTD',3))+row(th('')+['Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Total DR','> 10 MENIT','Achievement'].map(x=>th(x)).join(''))
     +row(td('PCN','store')+wc(wt))+row(td('Total','tot')+wc(wt).replace(/class="num/g,'class="tot num')));
   // 5 protection
   const pa=waVal('waQa'), pb=kb.pq;
@@ -1165,7 +1172,7 @@ $('rgExcel').addEventListener('click',()=>{
   const b=$('rgExcel'), old=b.textContent;
   try{
     const rows=rgXlsxRows(); if(!rows) return;
-    const blob=XL.build(rows.map(r=>r.length?r:[{t:''}]),[14,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16],'Report Closing');
+    const blob=XL.build(rows.map(r=>r.length?r:[{t:''}]),[14,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16],'Report Closing');
     const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='report-closing-region-'+$('waDate').value+'.xlsx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
     b.textContent='Excel terunduh';
   }catch(e){b.textContent='Gagal membuat Excel'}
