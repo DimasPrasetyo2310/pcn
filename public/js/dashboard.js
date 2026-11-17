@@ -726,13 +726,12 @@ document.addEventListener('click',async ev=>{ const t=ev.target; if(!t||!t.close
   b.disabled=true; const { data, error } = await SB.rpc('sp_pin_admin_set',{p_email:em,p_pin:v}); b.disabled=false;
   if(error||!data||!data.ok){ $('pin-err').style.color=''; $('pin-err').textContent=data?pinErr(data):'Gagal menghubungi server.'; return; }
   pinAdmin('PIN '+em+' tersimpan.'); });
-let spApprDT={};
-async function spLoadApprDate(d){
-  if(TIM||!SB||!d) return;
-  if(spApprDT[d]&&Date.now()-spApprDT[d]<15000) return; spApprDT[d]=Date.now();
-  const { data, error } = await SB.from('sp_approvals').select('sales_id,sale_date,tl_ok,tl_by,tl_at,mod_ok,mod_by,mod_at').eq('store_code',D.code).eq('sale_date',d);
-  if(error){ spApprDT[d]=0; return; }
-  (data||[]).forEach(r=>{ (spAppr[r.sales_id]||(spAppr[r.sales_id]={}))[r.sale_date]=r; }); renderSP(true);
+let spApprDT=0, spApprReady=false;
+async function spLoadApprDate(){ // memuat semua approval toko (untuk summary & notice hari tidak lengkap)
+  if(TIM||!SB) return;
+  if(spApprDT&&Date.now()-spApprDT<15000) return; spApprDT=Date.now();
+  const all=[]; for(let from=0;;from+=1000){ const { data, error } = await SB.from('sp_approvals').select('sales_id,sale_date,tl_ok,tl_by,tl_at,mod_ok,mod_by,mod_at').eq('store_code',D.code).range(from,from+999); if(error){ spApprDT=0; return; } all.push(...(data||[])); if(!data||data.length<1000) break; }
+  const m={}; all.forEach(r=>{ (m[r.sales_id]||(m[r.sales_id]={}))[r.sale_date]=r; }); spAppr=m; spApprReady=true; renderSP(true);
 }
 document.addEventListener('change',async ev=>{
   const c=ev.target; if(!c||!c.classList||!c.classList.contains('spc')) return;
@@ -762,30 +761,31 @@ function spList(all0,last,noFetch){
   const box=$('sp-list'); if(!box) return;
   const ld=(spDate&&SCH.dates.includes(spDate))?spDate:last; if(!ld){ box.innerHTML=''; return; }
   if(!noFetch) spLoadApprDate(ld);
-  const i=SCH.dates.indexOf(ld), dd=days[ld], idx={}; if(dd) (dd.people||[]).forEach(q=>{ idx[q.id]=q; });
-  const noAp=!!TIM; const canAp=canWrite===true&&!noAp;
-  const nn=v=>fmtN.format(Math.round(v)), cls=p=>p==null?'spn':p>=100?'spg':p>=75?'spa':'spb', pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
-  const who=(ap,k)=>{ if(!ap[k+'_ok']) return ''; const t=ap[k+'_at']?new Date(ap[k+'_at']).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''; return 'Disetujui oleh '+(ap[k+'_by']||'?')+(t?' · '+t:''); };
-  const ab=(k,id,ap,on)=>{ const ok=!!ap[k+'_ok'], w=who(ap,k);
-    if(on) return '<td class="c"><input type="checkbox" class="spc" data-k="'+k+'" data-d="'+ld+'" data-id="'+esc(id)+'"'+(ok?' checked':'')+' title="'+esc(w||'Klik untuk menyetujui')+'" aria-label="Approval '+k.toUpperCase()+' '+esc(id)+'"></td>';
-    return '<td class="c" title="'+esc(w)+'">'+(ok?'<span class="spg">✓</span>':'–')+'</td>'; };
-  const PINM=typeof SB!=='undefined'&&!!SB&&!noAp;
-  const nm=x=>String(x||'?').split('@')[0].replace(/\./g,' ').replace(/\b\w/g,c=>c.toUpperCase()), tm=t=>t?new Date(t).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-  const pb=(k,id,ap,can)=>{ const ok=!!ap[k+'_ok'], lbl=ok?'<span class="spg">✓</span> <small>'+esc(nm(ap[k+'_by']))+' · '+esc(tm(ap[k+'_at']))+'</small>':'–';
-    if(k==='mod'&&!ap.tl_ok&&!ok) return '<td class="c">–</td>';
-    if(!can||(k==='tl'&&ok&&ap.mod_ok)) return '<td class="c">'+lbl+'</td>';
-    const at='class="spap" data-k="'+k+'" data-id="'+esc(id)+'" data-d="'+ld+'"';
-    return ok?'<td class="c">'+lbl+' <button '+at+' data-on="0" title="Batalkan approval">Batal</button></td>':'<td class="c"><button '+at+' data-on="1">Approve '+k.toUpperCase()+'</button></td>'; };
-  const L=all0.filter(e=>(!spZ||e.zona===spZ)&&(!spShift.length||spShift.includes(e.c[i])));
-  let tb=0,ta=0,nTl=0,nMod=0,rows='';
-  L.forEach(e0=>{ const e=SCHM[e0.id]||e0, c=e.c[i], w=isWork(c), b=w?(e.tpe||0):0, q=idx[e.id], a=q?(+q.sales||0):0, pp=(w&&b>0&&dd)?a/b*100:null, ap=(spAppr[e.id]||{})[ld]||{};
-    const autoM=!ap.mod_ok&&ap.tl_ok&&pp!=null&&pp>=100; tb+=b; ta+=a; if(ap.tl_ok) nTl++; if(ap.mod_ok||autoM) nMod++;
-    rows+='<tr class="'+(!w?'off':'')+(e.id===spSel?' cur':'')+'"><td><b>'+esc(e.name||e.id)+'</b> <span class="note">'+esc(e.id.replace(/^S\d+-0*/,''))+'</span></td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td><td>'+(dd?nn(a):'')+'</td><td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td>'+(noAp?'':(PINM?pb('tl',e.id,ap,canAp&&!spMgr):ab('tl',e.id,ap,canAp&&!spMgr))+(autoM?'<td class="c" title="Auto Approved: pencapaian harian ≥ 100%"><span class="spg">✓</span> <small>Auto</small></td>':(PINM?pb('mod',e.id,ap,canAp&&spMgr):ab('mod',e.id,ap,canAp&&spMgr&&(ap.tl_ok||ap.mod_ok)))))+'</tr>'; });
-  rows+='<tr class="tt"><td>TOTAL ('+L.length+' salesperson)</td><td></td><td>'+nn(tb)+'</td><td>'+(dd?nn(ta):'')+'</td><td>'+(dd&&tb>0?pc(ta/tb*100):'')+'</td>'+(noAp?'':'<td class="c">'+nTl+'/'+L.length+'</td><td class="c">'+nMod+'/'+L.length+'</td>')+'</tr>';
-  box.innerHTML='<div class="spv"><b>Validasi harian per salesperson</b> <span class="note">Tanggal '+esc(fd(ld,{weekday:'short',day:'numeric',month:'short',year:'numeric'}))+(dd?'':' · belum ada data penjualan')+' · ubah lewat filter tanggal</span>'+
-    '<div class="spw"><table><thead><tr><th>Salesperson</th><th>Shift</th><th>Budget</th><th>Actual</th><th>%</th>'+(noAp?'':'<th>Approval TL</th><th>Approval MOD</th>')+'</tr></thead><tbody>'+(L.length?rows:'<tr><td colspan="7" class="note">Tidak ada salesperson untuk filter ini.</td></tr>')+'</tbody></table></div></div>';
+  const noAp=!!TIM; const ready=(typeof spApprReady==='undefined')||spApprReady;
+  const nn=v=>fmtN.format(Math.round(v)), pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%', sd=d=>fd(d,{day:'numeric',month:'short'});
+  const scope=all0.filter(e=>!spZ||e.zona===spZ).map(e0=>SCHM[e0.id]||e0);
+  const dayStat=(d,shifts)=>{ const i=SCH.dates.indexOf(d), dd=days[d], idx={}; if(dd) (dd.people||[]).forEach(q=>{ idx[q.id]=q; });
+    let n=0,tl=0,md=0,b=0,a=0;
+    scope.forEach(e=>{ const c=e.c[i]; if(!isWork(c)) return; if(shifts&&shifts.length&&!shifts.includes(c)) return;
+      const bb=e.tpe||0, q=idx[e.id], aa=q?(+q.sales||0):0, ap=((spAppr[e.id]||{})[d])||{};
+      n++; b+=bb; a+=aa; if(ap.tl_ok) tl++; const auto=ap.tl_ok&&bb>0&&aa/bb*100>=100; if(ap.mod_ok||auto) md++; });
+    return {n,tl,md,b,a,has:!!dd}; };
+  const st=dayStat(ld,spShift);
+  const tile=(lbl,val,sub,cls)=>'<div class="'+(cls||'')+'"><small>'+lbl+'</small><b>'+val+'</b><span>'+sub+'</span></div>';
+  const okc=(x)=>!ready?'':(st.n>0&&x===st.n?'apok':'apno');
+  let tiles=tile('Salesperson kerja',st.n,'shift kerja pada '+esc(sd(ld)))+
+    (noAp?'':tile('Approval TL',ready?st.tl+' / '+st.n:'…',ready?(st.n?pc(st.tl/st.n*100)+' sudah approve':'–'):'memuat',okc(st.tl))+
+             tile('Approval MOD',ready?st.md+' / '+st.n:'…',ready?(st.n?pc(st.md/st.n*100)+' sudah approve (termasuk auto)':'–'):'memuat',okc(st.md)))+
+    tile('Pencapaian hari itu',st.has&&st.b>0?pc(st.a/st.b*100):'–',st.has?'Rp '+nn(st.a)+' dari budget Rp '+nn(st.b):'belum ada data penjualan');
+  let notice='';
+  if(!noAp&&ready){
+    const inc=SCH.dates.filter(d=>d<=last).map(d=>Object.assign({d},dayStat(d))).filter(x=>x.n>0&&(x.tl<x.n||x.md<x.n));
+    notice=inc.length?'<div class="spwarn">⚠ <b>Validasi belum lengkap pada '+inc.length+' hari</b> (s.d. '+esc(sd(last))+'). Klik tanggal untuk melihat:<div class="spchips">'+inc.map(x=>'<button type="button" class="spchip'+(x.d===ld?' on':'')+'" data-pickd="'+x.d+'">'+esc(sd(x.d))+' · TL '+x.tl+'/'+x.n+' · MOD '+x.md+'/'+x.n+'</button>').join('')+'</div></div>'
+      :'<div class="spokn">✓ Validasi lengkap untuk semua hari s.d. '+esc(sd(last))+'.</div>';
+  }
+  box.innerHTML='<div class="spv"><b>Summary validasi</b> <span class="note">Tanggal '+esc(fd(ld,{weekday:'short',day:'numeric',month:'short',year:'numeric'}))+(st.has?'':' · belum ada data penjualan')+' · ubah lewat filter tanggal / zonasi / shift. Approval dilakukan oleh TL dan MOD di HP salesperson.</span><div class="spsum">'+tiles+'</div>'+notice+'</div>';
 }
-document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.closest('#sp-list [data-pick]'); if(!a) return; ev.preventDefault(); spSel=a.dataset.pick; renderSP(); const b=$('sp-body'); if(b&&b.scrollIntoView) b.scrollIntoView({behavior:'smooth',block:'start'}); });
+document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('#sp-list [data-pickd]'); if(!b) return; const sel=$('sp-date'); if(sel){ sel.value=b.dataset.pickd; sel.dispatchEvent(new Event('change',{bubbles:true})); } });
 function renderSP(noFetch){
   const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
   const all0=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
