@@ -842,7 +842,7 @@ const pad2=n=>String(n).padStart(2,'0');
 let WAQ=null, WAM=0, WSP=null;
 // Value inventory Class A: angka tetap (permanen)
 const RGVAL={AP:853112424.18,BT:1777219291.35,BM:476637964.89,DW:250966869.14,EL:906010979.28,FW:1212636161.43,HW:95061808.9,HS:17249138.36,KC:283096061.84,PS:3792603075.41,PL:902919696.79,TL:311040361.83};
-const RGK=['rgMr', 'rgMn', 'rgWt', 'rgDr', 'rgW10', 'rgP2', 'rgO2', 'rgRi', 'rgRk', 'rgRd', 'rgRs', 'rgRl', 'rgSa', 'rgS2', 'rgDmPd', 'rgDmOt', 'rgDmLate', 'rgGw', 'rgGd', 'rgG10', 'rgMd', 'rgM10'], RGINV=[["AP", "Appliances"], ["BT", "Bathroom"], ["BM", "Building Material"], ["DW", "Doors And Windows"], ["EL", "Electrical And Lighting"], ["FW", "Flooring And Wall"], ["HW", "Hardware"], ["HS", "Houseware & Hobbies"], ["KC", "Kitchen"], ["PS", "Paint And Sundries"], ["PL", "Plumbing"], ["TL", "Tools"]];
+const RGK=['rgMr', 'rgMn', 'rgWt', 'rgDr', 'rgW10', 'rgP2', 'rgO2', 'rgRi', 'rgRt', 'rgRk', 'rgRd', 'rgRs', 'rgRl', 'rgSa', 'rgS2', 'rgDmPd', 'rgDmOt', 'rgDmLate', 'rgGw', 'rgGd', 'rgG10', 'rgMd', 'rgM10'], RGINV=[["AP", "Appliances"], ["BT", "Bathroom"], ["BM", "Building Material"], ["DW", "Doors And Windows"], ["EL", "Electrical And Lighting"], ["FW", "Flooring And Wall"], ["HW", "Hardware"], ["HS", "Houseware & Hobbies"], ["KC", "Kitchen"], ["PS", "Paint And Sundries"], ["PL", "Plumbing"], ["TL", "Tools"]];
 const CLK=['clTt','clIt','clBt','clSm','clWi','clPdd','clOt','clD0','clD1','clD2','clD3','clLate',...RGK];
 const clVal=id=>{const e=$(id);if(id==='clLate'||id==='rgWt'||id==='rgGw')return e.value.trim();return e.value===''?null:+e.value};
 const WAK=[['waFfc','traffic_manual'],['waQt','prot_qty_t'],['waQa','prot_qty_a'],['waMt','member_t'],['waMa','member_a']];
@@ -1023,26 +1023,46 @@ function buildRg(r,d,act,ly){
   const tag=t=>'<div class="rgtag">'+t+'</div>';
   const neg=x=>x!=null&&x<0?'rneg':'';
   const row=(a)=>'<tr>'+a+'</tr>';
-  let h='<div class="rgtitle">DAILY REPORT CLOSING REGION 1</div><div class="rgdate">'+day+' '+MON[m-1]+' '+y+'</div>';
+  const BLN=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'], ST='PERCETAKAN NEGARA';
+  let h='<div class="rgdate" style="margin:0 0 6px 0"><b>Periode</b> &nbsp; '+day+' '+BLN[m-1]+' '+y+'</div>';
+  const thr=(t,rs,x)=>'<th rowspan="'+rs+'"'+(x?' class="'+x+'"':'')+'>'+t+'</th>', tot=(c)=>c.replace(/class="num/g,'class="tot num');
   // 1 TIEB
   const gS=g(act,lS), gT=g(r.cin,lc), gI=g(r.tr,lt), gE=g(eF,eL), gB=g(bk,bkL);
   const tieb=[bud?n(bud):'-',n(act),lS?n(lS):'-',p0(bud?act/bud:null),'<span class="'+neg(gS)+'">'+p2(gS)+'</span>',n(r.cin),n(lc),p2(gT),n(r.tr),n(lt),p2(gI),p2(eF),p2(eL),p2(gE),n(bk),n(bkL),'<span class="'+neg(gB)+'">'+p2(gB)+'</span>'];
   const cells=(c)=>c.map((x,i)=>td(x,'num'+(i===3?' acv':'')+(i===4?' gw':''))).join('');
-  h+=tag('TIEB')+T('w1',row(th('Store',1,'st')+th('SALES',5)+th('TRAFFIC',3)+th('INVOICE',3)+th('E TRAFFIC',3)+th('BASKET SIZE',3))+row(th('')+['Budget','Actual','LY','ACV','GROWTH','ACT','LY','GRW','ACT','LY','GRW','ACT','LY','GRW','ACT','LY','GRW'].map(x=>th(x)).join(''))
-    +row(td('PCN','store')+cells(tieb))+row(td('Total','tot')+cells(tieb).replace(/class="num/g,'class="tot num')));
+  h+=tag('TIEB')+T('w1',row(thr('Store',2,'st')+th('SALES',5)+th('TRAFFIC',2)+thr('GRW',2)+th('INVOICE',2)+thr('GRW',2)+th('E TRAFFIC',2)+thr('GRW',2)+th('BASKET SIZE',2)+thr('GRW',2))+row(['Budget','Actual','LY','ACV','GRW','ACT','LY','ACT','LY','ACT','LY','ACT','LY'].map(x=>th(x)).join(''))
+    +row(td(ST,'store')+cells(tieb))+row(td('Total','tot')+tot(cells(tieb))));
   // 2 inventory
-  const inv=RGINV.map(([k])=>RGVAL[k]), invT=sum(inv.map(x=>x||0)), anyInv=inv.some(x=>x!=null);
-  h+=tag('VALUE INVENTORY CLASS A')+T('w2',row(th('STORE',1,'st')+th('VALUE INVENTORY CLASS A BY CATEGORY',12)+th('TOTAL INV CLASS A'))+row(th('')+RGINV.map(([k])=>th(k)).join('')+th(''))
-    +row(td('PCN','store')+inv.map(x=>td(n2(x),'num')).join('')+td(anyInv?n2(invT):'-','num'))+row(td('TOTAL','tot')+inv.map(x=>td(n(x),'tot num')).join('')+td(anyInv?n(invT):'-','tot num')));
-  // 3 service level
-  const pd=clVal('clPdd'), ot=clVal('clOt'), dxs=[clVal('clD0'),clVal('clD1'),clVal('clD2')].filter(x=>x!=null), p2d=dxs.length?sum(dxs):null, o2d=p2d;
-  const rs=['rgRi','rgRk','rgRd','rgRs','rgRl'].map(i=>v(i)), rsT=sum(rs.map(x=>x||0));
-  const dslc=[n(pd),n(ot),p2(pd&&ot!=null?ot/pd:null),n(p2d),n(o2d),p2(pd&&p2d!=null?p2d/pd:null),p2(p2d&&o2d!=null?o2d/p2d:null),...rs.map(n),rs.some(x=>x!=null)?n(rsT):'-',...dsl];
-  const dmP=clVal('rgDmPd'), dmO=clVal('rgDmOt'), dmL=clVal('rgDmLate'), dsl=[n(dmP),n(dmO),n(dmL),p2(dmP&&dmO!=null?dmO/dmP:null),p2(dmP&&dmL!=null?(dmP-dmL)/dmP:null)];
-  const dc=c=>c.map((x,i)=>td(x,'num'+(i===2||i===5||i===6||i===16||i===17?' acv':''))).join('');
-  h+='<div class="rgsp"></div>'+T('w3',row(th('STORE',1,'st')+th('TOTAL',3)+th('TWO DAYS DELIVERY (0-2 Hari)',4)+th('Reason keterlambatan',5)+th('Total')+th('DSL MTD',5))+row(th('')+['PD','OT','Service level','PD','OT','CONT','Service level','Internal','Req kons','Dc','Supp','Lain 2','','PD','OT ALL','LATE RC','% DSL ALL','% DSL RC'].map(x=>th(x)).join(''))
-    +row(td('PCN','store')+dc(dslc))+row(td('TOTAL','tot')+dc(dslc).replace(/class="num/g,'class="tot num')));
-  // 4 project / member / waiting
+  const RGI=[...RGINV.slice(0,9),['MS','Miscellaneous'],...RGINV.slice(9)];
+  const inv=RGI.map(([k])=>RGVAL[k]), invT=sum(inv.map(x=>x||0)), anyInv=inv.some(x=>x!=null);
+  h+=tag('VALUE INVENTORY CLASS A')+T('w2',row(th('STORE',1,'st')+RGI.map(([k,nm])=>th(nm.toUpperCase())).join('')+th('TOTAL INV CLASS A'))
+    +row(td(ST,'store')+inv.map(x=>td(n2(x),'num')).join('')+td(anyInv?n2(invT):'-','num'))+row(td('TOTAL','tot')+inv.map(x=>td(n(x),'tot num')).join('')+td(anyInv?n(invT):'-','tot num')));
+  // 3 DSL
+  const pd=clVal('clPdd'), ot=clVal('clOt'), rs=['rgRi','rgRt','rgRk','rgRd','rgRs','rgRl'].map(i=>clVal(i)), rsT=sum(rs.map(x=>x||0));
+  const dmP=clVal('rgDmPd'), dmO=clVal('rgDmOt'), dmL=clVal('rgDmLate');
+  const dslc=[n(pd),n(ot),p2(pd&&ot!=null?ot/pd:null),...rs.map(n),rs.some(x=>x!=null)?n(rsT):'-',n(dmP),n(dmO),n(dmL),p2(dmP&&dmO!=null?dmO/dmP:null),p2(dmP&&dmL!=null?(dmP-dmL)/dmP:null)];
+  const dc=c=>c.map((x,i)=>td(x,'num'+(i===2||i===13||i===14?' acv':''))).join('');
+  h+=tag('DSL')+T('w3',row(thr('STORE',2,'st')+th('DSL Daily',2)+thr('Service level',2)+th('Reason keterlambatan Daily',7)+th('DSL MTD',5))+row(['PD','OT','Internal','Tbt','Req kons','Dc','Supp','Lain 2','Total','PD','OT ALL','LATE RC','% DSL ALL','% DSL RC'].map(x=>th(x)).join(''))
+    +row(td(ST,'store')+dc(dslc))+row(td('TOTAL','tot')+tot(dc(dslc))));
+  // 4 waiting time
+  const tsec=x=>{const q=String(x||'').trim().match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);return q?+q[1]*3600+ +q[2]*60+(+q[3]||0):null}, tfmt=x=>{if(x==null||!isFinite(x))return '-';x=Math.round(x);return Math.floor(x/3600)+':'+pad2(Math.floor(x%3600/60))+':'+pad2(x%60)};
+  const ach=(dr,t)=>dr>0&&t!=null?p2(1-t/dr):'-';
+  const pw=clVal('rgWt'), pdr=clVal('rgDr'), p10=clVal('rgW10'), gw=clVal('rgGw'), gdr=clVal('rgGd'), g10=clVal('rgG10'), mdr=clVal('rgMd'), m10=clVal('rgM10');
+  const anyW=pdr!=null||gdr!=null, tdr=anyW?(pdr||0)+(gdr||0):null, t10=(p10!=null||g10!=null)?(p10||0)+(g10||0):null;
+  const sp=tsec(pw), sg=tsec(gw); let tav=null;
+  if(sp!=null&&sg!=null&&(pdr||0)+(gdr||0)>0) tav=(sp*(pdr||0)+sg*(gdr||0))/((pdr||0)+(gdr||0)); else if(sp!=null&&sg==null) tav=sp; else if(sg!=null&&sp==null) tav=sg;
+  const wt=[pw||'-',n(pdr),n(p10),ach(pdr,p10),gw||'-',n(gdr),n(g10),ach(gdr,g10),tfmt(tav),n(tdr),n(t10),ach(tdr,t10),n(mdr),n(m10),ach(mdr,m10)], wc=c=>c.map((x,i)=>td(x,'num'+(i===3||i===7||i===11||i===14?' acv':''))).join('');
+  h+=tag('WATING TIME')+T('w4 w7',row(th('Store Name',1,'st')+th('AWT PND DAILY',4)+th('AWT GUDANG DAILY',4)+th('TOTAL AWT PND &amp; GUDANG DAILY',4)+th('TOTAL AWT PND &amp; GUDANG MTD',3))+row(th('')+['Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Total DR','> 10 MENIT','Achievement'].map(x=>th(x)).join(''))
+    +row(td(ST,'store')+wc(wt))+row(td('','tot')+tot(wc(wt))));
+  // 5 salper, bathroom, protection
+  const sa=v('rgSa'), s2=v('rgS2'), bb=budgetDay(d,'BATHROOM'), bl=LYC.get(lyDate(d)+'|BATHROOM')||0, ba=sum(DATA.C.filter(c=>c[0]===d&&c[1]==='BATHROOM').map(c=>c[2])), gb=g(ba,bl);
+  const pa=waVal('waQa'), pb=kb.pq, mk=d.slice(0,7), pTm=sum([...KB].filter(([k])=>k.slice(0,7)===mk).map(([k,x])=>x.pq||0));
+  const sb=[n(sa),n(s2),p0(sa&&s2!=null?s2/sa:null),bb?n(bb):'-',bl?n(bl):'-',n(ba),p0(bb?ba/bb:null),'<span class="'+neg(gb)+'">'+(gb==null?'-':Math.round(gb*100)+'%')+'</span>',
+    n(pa),n(pb),p0(pb&&pa!=null?pa/pb:null),WAM>0?n(WAM):'-',pTm?n(pTm):'-',p0(pTm&&WAM>0?WAM/pTm:null)];
+  const bc=c=>c.map((x,i)=>td(x,'num'+(i===2||i===6||i===10||i===13?' acv':''))).join('');
+  h+=tag('SALPER JUALAN &gt;2 CATEGORY &amp; SALES BATHROOM')+T('w6',row(thr('STORE',2,'st')+th('SALPER JUALAN &gt;2 CATEGORY',3)+th('SALES BATHROOM',5)+th('MITRA10 PROTECTION',6))+row(['ALL SALPER','SALPER &gt;2 CAT','CTR&gt;2 CATEGORY','BUDGET','LAST YEARS','ACTUAL','ACH','GRW','Ach Daily','Target','% Achv','Ach MTD','Target','% Achv'].map(x=>th(x)).join(''))
+    +row(td(ST,'store')+bc(sb))+row(td('TOTAL','tot')+tot(bc(sb))));
+  // 6 project / member / pareto
   const pj=dm('source','Sales Project'), mr=waVal('waMa'), mn=v('rgMn'), sm=clVal('clSm');
   if(!PARC.has(d)) parLoad(d);
   const pr0=PARC.get(d), pr=pr0&&pr0.length?pr0:null, pf=d.slice(0,8)+'01', mtdStore=sum(DATA.D.filter(x=>x.d>=pf&&x.d<=d).map(x=>x.sx));
@@ -1051,26 +1071,8 @@ function buildRg(r,d,act,ly){
   const mem=[n(pj),p2(act?pj/act:null),n(mr),n(mn),p0(mr&&mn!=null?mn/mr:null),n(sm),p2(act&&sm!=null?sm/act:null),
     n(pInv),n(pSal),p2(pr&&act?pSal/act:null),n(pInvM),n(pSalM),p2(pr&&mtdStore?pSalM/mtdStore:null),mtdStore?n(mtdStore):'-'];
   const mc=c=>c.map((x,i)=>td(x,'num'+(i===1||i===4||i===6||i===9||i===12?' acv':''))).join('');
-  h+=tag('SALES PROJECT, MEMBER, CUST PARETO')+T('w4',row(th('Store Name',1,'st')+th('Sales project',2)+th('MEMBER',5)+th('Customer pareto Daily',3)+th('Customer pareto MTD',4))+row(th('')+['Actual Project','Contribusi','Member registrasi','New member transaksi','NEMS','Sales new member','Cont sales new member','Invoice','Sales','Ctr sales to store','Invoice','Sales','Ctr sales to store','MTD Sales Store'].map(x=>th(x)).join(''))
-    +row(td('PCN','store')+mc(mem))+row(td('Total','tot')+mc(mem).replace(/class="num/g,'class="tot num')));
-  const tsec=x=>{const m=String(x||'').trim().match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);return m?+m[1]*3600+ +m[2]*60+(+m[3]||0):null}, tfmt=x=>{if(x==null||!isFinite(x))return '-';x=Math.round(x);return Math.floor(x/3600)+':'+pad2(Math.floor(x%3600/60))+':'+pad2(x%60)};
-  const ach=(dr,t)=>dr>0&&t!=null?p2(1-t/dr):'-';
-  const pw=clVal('rgWt'), pdr=clVal('rgDr'), p10=clVal('rgW10'), gw=clVal('rgGw'), gdr=clVal('rgGd'), g10=clVal('rgG10'), mdr=clVal('rgMd'), m10=clVal('rgM10');
-  const anyW=pdr!=null||gdr!=null, tdr=anyW?(pdr||0)+(gdr||0):null, t10=(p10!=null||g10!=null)?(p10||0)+(g10||0):null;
-  const sp=tsec(pw), sg=tsec(gw); let tav=null;
-  if(sp!=null&&sg!=null&&(pdr||0)+(gdr||0)>0) tav=(sp*(pdr||0)+sg*(gdr||0))/((pdr||0)+(gdr||0)); else if(sp!=null&&sg==null) tav=sp; else if(sg!=null&&sp==null) tav=sg;
-  const wt=[pw||'-',n(pdr),n(p10),ach(pdr,p10),gw||'-',n(gdr),n(g10),ach(gdr,g10),tfmt(tav),n(tdr),n(t10),ach(tdr,t10),n(mdr),n(m10),ach(mdr,m10)], wc=c=>c.map((x,i)=>td(x,'num'+(i===3||i===7||i===11||i===14?' acv':''))).join('');
-  h+=tag('WATING TIME')+T('w4 w7',row(th('Store Name',1,'st')+th('AWT PND DAILY',4)+th('AWT GUDANG DAILY',4)+th('TOTAL AWT PND &amp; GUDANG DAILY',4)+th('TOTAL AWT PND &amp; GUDANG MTD',3))+row(th('')+['Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Rata rata waktu tunggu','Total DR','> 10 MENIT','Achievement','Total DR','> 10 MENIT','Achievement'].map(x=>th(x)).join(''))
-    +row(td('PCN','store')+wc(wt))+row(td('Total','tot')+wc(wt).replace(/class="num/g,'class="tot num')));
-  // 5 protection
-  const pa=waVal('waQa'), pb=kb.pq;
-  h+=tag('MITRA10 PROTECTION')+T('w5',row(th('Store Name',1,'st')+th('MITRA10 PROTECTION',3))+row(th('')+th('ACTUAL')+th('BUDGET')+th('MTD'))
-    +row(td('PCN','store')+td(n(pa),'num')+td(n(pb),'num')+td(WAM>0?n(WAM):'-','num'))+row(td('','tot')+td(n(pa),'tot num')+td(n(pb),'tot num')+td(WAM>0?n(WAM):'-','tot num')));
-  // 6 salper dan bathroom
-  const sa=v('rgSa'), s2=v('rgS2'), bb=budgetDay(d,'BATHROOM'), bl=LYC.get(lyDate(d)+'|BATHROOM')||0, ba=sum(DATA.C.filter(c=>c[0]===d&&c[1]==='BATHROOM').map(c=>c[2])), gb=g(ba,bl);
-  const sb=[n(sa),n(s2),p0(sa&&s2!=null?s2/sa:null),bb?n(bb):'-',bl?n(bl):'-',n(ba),p0(bb?ba/bb:null),'<span class="'+neg(gb)+'">'+(gb==null?'-':Math.round(gb*100)+'%')+'</span>'];
-  const bc=c=>c.map((x,i)=>td(x,'num'+(i===6?' acv':''))).join('');
-  h+=tag('SALPER JUALAN >2 CATEGORY &amp; SALES BATHROOM')+T('w6',row(th('STORE',1,'st')+th('SALPER JUALAN >2 CATEGORY',3)+th('SALES BATHROOM',5))+row(th('')+['ALL SALPER','SALPER >2 CAT','CTR >2 CAT','BUDGET','LAST YEARS','ACTUAL','ACV','GRW'].map(x=>th(x)).join(''))+row(td('PCN','store')+bc(sb)));
+  h+=tag('SALES PROJECT,MEMBER, CUST PARETO')+T('w4',row(th('Store Name',1,'st')+th('Sales project',2)+th('New Member',5)+th('Customer pareto Daily',3)+th('Customer pareto MTD',4))+row(th('')+['Actual Project','Contribusi','Member registrasi','New member transaksi','NEMS','Sales new member','Cont sales new member','Invoice','Sales','Ctr sales to store','Invoice','Sales','Ctr sales to store','MTD Sales Store'].map(x=>th(x)).join(''))
+    +row(td(ST,'store')+mc(mem))+row(td('','tot')+tot(mc(mem))));
   $('rgView').innerHTML=h;
 }
 
