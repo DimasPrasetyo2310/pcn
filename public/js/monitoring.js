@@ -1180,7 +1180,7 @@ $('rgExcel').addEventListener('click',()=>{
   }catch(e){b.textContent='Gagal membuat Excel'}
   setTimeout(()=>{b.textContent=old},3000);
 });
-$('rgShot').addEventListener('click',()=>runShot($('rgShot'),$('rgView'),3400,'report-closing-region-'+$('waDate').value+'.png',c=>c.classList.add('rgbig')));
+$('rgShot').addEventListener('click',()=>runShot($('rgShot'),$('rgView'),2760,'report-closing-region-'+$('waDate').value+'.png',c=>{c.classList.add('rgbig');c.querySelectorAll('table.w2 td.num').forEach(x=>{x.textContent=x.textContent.replace(/\.\d+$/,'')})}));
 
 async function saveWa(){
   if(!canWrite||!SB||!WAD) return;
