@@ -771,21 +771,53 @@ function spList(all0,last,noFetch){
       n++; b+=bb; a+=aa; if(ap.tl_ok) tl++; const auto=ap.tl_ok&&bb>0&&aa/bb*100>=100; if(ap.mod_ok||auto) md++; });
     return {n,tl,md,b,a,has:!!dd}; };
   const st=dayStat(ld,spShift);
-  const tile=(lbl,val,sub,cls)=>'<div class="'+(cls||'')+'"><small>'+lbl+'</small><b>'+val+'</b><span>'+sub+'</span></div>';
+  SPV={scope,last,ld,shifts:spShift,noAp};
+  const tile=(lbl,val,sub,cls,f,so)=>'<div class="'+(cls||'')+'" data-spp="'+(f||'all')+'" data-sps="'+(so||'')+'" role="button" tabindex="0" title="Klik untuk melihat detail"><small>'+lbl+'</small><b>'+val+'</b><span>'+sub+'</span></div>';
   const okc=(x)=>!ready?'':(st.n>0&&x===st.n?'apok':'apno');
   let tiles=tile('Salesperson kerja',st.n,'shift kerja pada '+esc(sd(ld)))+
-    (noAp?'':tile('Approval TL',ready?st.tl+' / '+st.n:'…',ready?(st.n?pc(st.tl/st.n*100)+' sudah approve':'–'):'memuat',okc(st.tl))+
-             tile('Approval MOD',ready?st.md+' / '+st.n:'…',ready?(st.n?pc(st.md/st.n*100)+' sudah approve (termasuk auto)':'–'):'memuat',okc(st.md)))+
-    tile('Pencapaian hari itu',st.has&&st.b>0?pc(st.a/st.b*100):'–',st.has?'Rp '+nn(st.a)+' dari budget Rp '+nn(st.b):'belum ada data penjualan');
+    (noAp?'':tile('Approval TL',ready?st.tl+' / '+st.n:'…',ready?(st.n?pc(st.tl/st.n*100)+' sudah approve':'–'):'memuat',okc(st.tl),'tl')+
+             tile('Approval MOD',ready?st.md+' / '+st.n:'…',ready?(st.n?pc(st.md/st.n*100)+' sudah approve (termasuk auto)':'–'):'memuat',okc(st.md),'md'))+
+    tile('Pencapaian hari itu',st.has&&st.b>0?pc(st.a/st.b*100):'–',st.has?'Rp '+nn(st.a)+' dari budget Rp '+nn(st.b):'belum ada data penjualan','','all','ach');
   let notice='';
   if(!noAp&&ready){
     const inc=SCH.dates.filter(d=>d<=last).map(d=>Object.assign({d},dayStat(d))).filter(x=>x.n>0&&(x.tl<x.n||x.md<x.n));
-    notice=inc.length?'<div class="spwarn">⚠ <b>Validasi belum lengkap pada '+inc.length+' hari</b> (s.d. '+esc(sd(last))+'). Klik tanggal untuk melihat:<div class="spchips">'+inc.map(x=>'<button type="button" class="spchip'+(x.d===ld?' on':'')+'" data-pickd="'+x.d+'">'+esc(sd(x.d))+' · TL '+x.tl+'/'+x.n+' · MOD '+x.md+'/'+x.n+'</button>').join('')+'</div></div>'
+    notice=inc.length?'<div class="spwarn">⚠ <b>Validasi belum lengkap pada '+inc.length+' hari</b> (s.d. '+esc(sd(last))+'). Klik tanggal untuk melihat detail:<div class="spchips">'+inc.map(x=>'<button type="button" class="spchip'+(x.d===ld?' on':'')+'" data-pickd="'+x.d+'">'+esc(sd(x.d))+' · TL '+x.tl+'/'+x.n+' · MOD '+x.md+'/'+x.n+'</button>').join('')+'</div></div>'
       :'<div class="spokn">✓ Validasi lengkap untuk semua hari s.d. '+esc(sd(last))+'.</div>';
   }
-  box.innerHTML='<div class="spv"><b>Summary validasi</b> <span class="note">Tanggal '+esc(fd(ld,{weekday:'short',day:'numeric',month:'short',year:'numeric'}))+(st.has?'':' · belum ada data penjualan')+' · ubah lewat filter tanggal / zonasi / shift. Approval dilakukan oleh TL dan MOD di HP salesperson.</span><div class="spsum">'+tiles+'</div>'+notice+'</div>';
+  box.innerHTML='<div class="spv"><b>Summary validasi</b> <span class="note">Tanggal '+esc(fd(ld,{weekday:'short',day:'numeric',month:'short',year:'numeric'}))+(st.has?'':' · belum ada data penjualan')+' · klik kartu atau tanggal untuk melihat detail. Approval dilakukan oleh TL dan MOD di HP salesperson.</span><div class="spsum">'+tiles+'</div>'+notice+'</div>';
 }
-document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('#sp-list [data-pickd]'); if(!b) return; const sel=$('sp-date'); if(sel){ sel.value=b.dataset.pickd; sel.dispatchEvent(new Event('change',{bubbles:true})); } });
+let SPV=null, SPPOP=null;
+const spTime=iso=>{ if(!iso) return ''; try{ return new Date(iso).toLocaleTimeString('id-ID',{timeZone:'Asia/Jakarta',hour:'2-digit',minute:'2-digit'}).replace('.',':'); }catch(e){ return ''; } };
+function spValRows(d){ const c=SPV, i=SCH.dates.indexOf(d), dd=days[d], idx={}; if(dd) (dd.people||[]).forEach(q=>{ idx[q.id]=q; }); const out=[];
+  c.scope.forEach(e=>{ const sh=e.c[i]; if(!isWork(sh)) return; if(c.shifts&&c.shifts.length&&!c.shifts.includes(sh)) return;
+    const bb=e.tpe||0, q=idx[e.id], aa=q?(+q.sales||0):0, ap=((spAppr[e.id]||{})[d])||{}, auto=!ap.mod_ok&&!!ap.tl_ok&&bb>0&&aa/bb*100>=100;
+    out.push({e,sh,bb,aa,pct:bb>0?aa/bb*100:null,tl:!!ap.tl_ok,tlb:ap.tl_by,tla:ap.tl_at,md:!!ap.mod_ok||auto,auto,mdb:ap.mod_by,mda:ap.mod_at}); });
+  return out; }
+function spValShow(d,f,so,open){
+  const c=SPV; if(!c) return; SPPOP={d,f,so}; if(open) kShow('Detail validasi & pencapaian',[],'',null);
+  const nn=v=>fmtN.format(Math.round(v)), pc=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%', sd=x=>fd(x,{day:'numeric',month:'short'});
+  const who=v=>v?esc(String(v).split('@')[0]):'';
+  const rows=spValRows(d), n=rows.length, cTl=rows.filter(r=>r.tl).length, cMd=rows.filter(r=>r.md).length, tb=rows.reduce((s,r)=>s+r.bb,0), ta=rows.reduce((s,r)=>s+r.aa,0);
+  const noAp=c.noAp; if(noAp&&(f==='tl'||f==='md'||f==='inc'||f==='ok')) f='all';
+  const flt={all:()=>true,tl:r=>!r.tl,md:r=>!r.md,inc:r=>!r.tl||!r.md,ok:r=>r.tl&&r.md}[f]||(()=>true);
+  const sh=rows.filter(flt); const cnt=g=>rows.filter(g).length;
+  sh.sort(so==='ach'?(a,b)=>(b.pct==null)-(a.pct==null)||(b.pct||0)-(a.pct||0):so==='low'?(a,b)=>(a.pct==null)-(b.pct==null)||(a.pct||0)-(b.pct||0):(a,b)=>String(a.e.name||a.e.id).localeCompare(String(b.e.name||b.e.id),'id'));
+  $('kpop-t').textContent='Detail validasi & pencapaian';
+  $('kpop-per').textContent=fd(d,{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · sales exclude PPN';
+  const info=[['Salesperson kerja',n]].concat(noAp?[]:[['Approval TL',cTl+' / '+n],['Approval MOD',cMd+' / '+n]]).concat([['Pencapaian',tb>0?pc(ta/tb*100):'–'],['Actual',    'Rp '+nn(ta)],['Budget','Rp '+nn(tb)]]);
+  $('kpop-info').innerHTML=info.map(i=>'<div><span>'+esc(i[0])+'</span><b>'+esc(String(i[1]))+'</b></div>').join('');
+  const dopt=SCH.dates.filter(x=>x<=c.last).map(x=>{ let w=''; if(!noAp){ const bk=SPV.ld; const rr=spValRows(x); if(rr.length&&rr.some(r=>!r.tl||!r.md)) w=' ⚠'; } return '<option value="'+x+'"'+(x===d?' selected':'')+'>'+esc(fd(x,{weekday:'short',day:'numeric',month:'short'}))+w+'</option>'; }).join('');
+  const tabs=[['all','Semua',n]].concat(noAp?[]:[['tl','Belum TL',cnt(r=>!r.tl)],['md','Belum MOD',cnt(r=>!r.md)],['inc','Belum lengkap',cnt(r=>!r.tl||!r.md)],['ok','Lengkap',cnt(r=>r.tl&&r.md)]]);
+  const ctl='<div class="spvc"><label>Tanggal <select data-spvd>'+dopt+'</select></label><div class="spvt">'+tabs.map(t=>'<button type="button" data-spvf="'+t[0]+'"'+(f===t[0]?' class="on"':'')+'>'+t[1]+' <i>'+t[2]+'</i></button>').join('')+'</div><label>Urutkan <select data-spvs><option value=""'+(!so?' selected':'')+'>Nama</option><option value="ach"'+(so==='ach'?' selected':'')+'>Pencapaian tertinggi</option><option value="low"'+(so==='low'?' selected':'')+'>Pencapaian terendah</option></select></label></div>';
+  const stc=(on,by,at,auto)=>on?'<td class="spok">✓ '+(auto?'Auto':who(by))+(at&&!auto?'<small>'+esc(spTime(at))+'</small>':'')+'</td>':'<td class="spno">Belum</td>';
+  const col=p=>p==null?'':p>=100?'#0e6b49':p>=75?'#a86a00':'#b4271c';
+  const body=sh.length?'<table class="pt spvtb"><thead><tr><th>#</th><th>Sales ID</th><th>Nama</th><th>Zonasi</th><th>Shift</th><th class="rt">Budget</th><th class="rt">Actual</th><th class="rt">%</th>'+(noAp?'':'<th>TL</th><th>MOD</th>')+'</tr></thead><tbody>'+sh.map((r,k)=>'<tr><td class="mut">'+(k+1)+'</td><td class="num">'+esc(String(r.e.id).replace(/^S10005-0*/,''))+'</td><td><b>'+esc(r.e.name||r.e.id)+'</b></td><td>'+esc(r.e.zona||'–')+'</td><td>'+esc(r.sh)+'</td>'+kNum(nn(r.bb))+kNum(nn(r.aa))+'<td class="num rt" style="color:'+col(r.pct)+';font-weight:700">'+pc(r.pct)+'</td>'+(noAp?'':stc(r.tl,r.tlb,r.tla)+stc(r.md,r.mdb,r.mda,r.auto))+'</tr>').join('')+'<tr class="tot"><td colspan="5"><b>TOTAL ('+sh.length+' orang)</b></td>'+kNum('<b>'+nn(sh.reduce((s,r)=>s+r.bb,0))+'</b>')+kNum('<b>'+nn(sh.reduce((s,r)=>s+r.aa,0))+'</b>')+'<td class="num rt"><b>'+pc((x=>x.b>0?x.a/x.b*100:null)({b:sh.reduce((s,r)=>s+r.bb,0),a:sh.reduce((s,r)=>s+r.aa,0)}))+'</b></td>'+(noAp?'':'<td>'+sh.filter(r=>r.tl).length+'/'+sh.length+'</td><td>'+sh.filter(r=>r.md).length+'/'+sh.length+'</td>')+'</tr></tbody></table>':'<p class="note" style="padding:14px 4px">'+(n?'Tidak ada salesperson pada filter ini.':'Tidak ada salesperson kerja pada tanggal ini.')+'</p>';
+  $('kpop-body').innerHTML=ctl+body; if(open) $('kpop-body').scrollTop=0; }
+document.addEventListener('click',ev=>{ const t=ev.target.closest&&ev.target.closest('#sp-list [data-pickd], #sp-list [data-spp], #kpop-body [data-spvf]'); if(!t) return;
+  if(t.dataset.spvf){ if(SPPOP) spValShow(SPPOP.d,t.dataset.spvf,SPPOP.so); return; }
+  if(!SPV) return; if(t.dataset.pickd) spValShow(t.dataset.pickd,'inc','',true); else spValShow(SPV.ld,t.dataset.spp,t.dataset.sps,true); });
+document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-list [data-spp]')&&SPV) spValShow(SPV.ld,ev.target.dataset.spp,ev.target.dataset.sps,true); });
+document.addEventListener('change',ev=>{ const t=ev.target; if(!t||!t.matches||!SPPOP) return; if(t.matches('[data-spvd]')) spValShow(t.value,SPPOP.f,SPPOP.so); else if(t.matches('[data-spvs]')) spValShow(SPPOP.d,SPPOP.f,t.value); });
 function renderSP(noFetch){
   const box=$('sp-body'), sel=$('sp-sel'); if(!box) return;
   const all0=SCH.people.filter(e=>e.zona && e.role!=='Kasir').sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id),'id'));
