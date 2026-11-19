@@ -131,7 +131,108 @@ function parseSchedule(XLSX, buf){
   if(!people.length) throw new Error('tidak ada baris jadwal');
   return {basis:'sched1', dates:dcols.map(x=>x[1]), people};
 }
-if(typeof module!=='undefined') module.exports = {parseReport, parseSchedule};
+/* ---- Jadwal per zona (diunggah TL zonasi): format ABSENSI ZONA ---- */
+const ZKODE = ['S','P','M','OFF','CT','MT','CUTI'];
+const ZBLN = ['JANUARI','FEBRUARI','MARET','APRIL','MEI','JUNI','JULI','AGUSTUS','SEPTEMBER','OKTOBER','NOVEMBER','DESEMBER'];
+const colName = i => { let s=''; i++; while(i>0){ const r=(i-1)%26; s=String.fromCharCode(65+r)+s; i=Math.floor((i-1)/26); } return s; };
+const normZona = z => String(z).replace(/\s+/g,' ').trim().toUpperCase();
+function isZonaFile(XLSX, buf){
+  try{ const rows=readRows(XLSX, buf); return !!(rows[0] && norm(rows[0][0])==='salesperson id' && norm(rows[0][3]||'')==='zona'); }
+  catch(e){ return false; }
+}
+/* Membaca file jadwal satu zona. Bila format tidak sesuai, melempar Error dengan daftar alasan (satu per baris). master = dokumen jadwal tersimpan (opsional) untuk pemeriksaan silang. */
+function parseZona(XLSX, buf, storeCode, master){
+  const wb = XLSX.read(buf, {type:'array', raw:true});
+  const sn = wb.SheetNames[0], ws = sn && wb.Sheets[sn];
+  if(!ws) throw new Error('File kosong, tidak ada sheet yang bisa dibaca.');
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+  const err = [], warn = [], more = () => err.length>=12;
+  const add = t => { if(err.length<12) err.push(t); else err.length===12 && err.push('…dan kesalahan lain. Perbaiki yang di atas lebih dulu, lalu unggah lagi.'); };
+  // 1. bulan dan tahun dari nama sheet
+  let y=0, m=0;
+  const mm = /([A-Za-z]{3,})\s*[-_.\/ ]*\s*(\d{4})/.exec(String(sn));
+  if(mm){ const mo = MON[mm[1].slice(0,3).toLowerCase()]; if(mo){ m=mo; y=+mm[2]; } }
+  if(!m) add('Nama sheet "'+sn+'" harus berisi bulan dan tahun, contoh: NOVEMBER 2026.');
+  const dim = m ? new Date(y,m,0).getDate() : 0;
+  // 2. judul kolom (baris 1)
+  const hd = rows[0] || [];
+  const want = ['SALESPERSON ID','NAMA','BRAND','ZONA'];
+  const hdOk = want.every((w,i)=>norm(hd[i]||'')===w.toLowerCase());
+  if(!hdOk) add('Baris 1 harus berisi judul kolom A sampai D: SALESPERSON ID, NAMA, BRAND, ZONA. Ditemukan: '+hd.slice(0,4).map(x=>'"'+String(x).trim()+'"').join(', ')+'.');
+  let lastCol = -1; hd.forEach((c,i)=>{ if(String(c).trim()!=='') lastCol=i; });
+  if(hdOk && m){
+    const ds = []; for(let i=4;i<=lastCol;i++) ds.push(hd[i]);
+    const seq = ds.every((c,i)=>Number(String(c).trim())===i+1 && String(c).trim()!=='');
+    if(!seq || ds.length!==dim){
+      add('Kolom tanggal (mulai kolom E) harus 1 sampai '+dim+' berurutan, karena '+ZBLN[m-1].charAt(0)+ZBLN[m-1].slice(1).toLowerCase()+' '+y+' punya '+dim+' hari. '+(ds.length? 'Ditemukan '+ds.length+' kolom'+(seq?'':' dan urutannya tidak 1, 2, 3, …')+'.' : 'Tidak ditemukan kolom tanggal.'));
+    }
+  }
+  if(err.length) throw Object.assign(new Error(err.join('\n')),{list:err});
+  // 3. baris data
+  const seen = new Map(), people = [], zonas = new Map();
+  const idRe = /^S\d{5}-\d{10}$/;
+  for(let i=1;i<rows.length;i++){
+    const r = rows[i], rn = i+1;
+    if(!r || r.slice(0,4+dim).every(c=>String(c).trim()==='')) continue;
+    const id = String(r[0]).trim().toUpperCase(), nm = clean(String(r[1])), br = String(r[2]).trim(), zn = normZona(r[3]);
+    let bad = false;
+    if(!idRe.test(id)){ add('Baris '+rn+': SALESPERSON ID "'+String(r[0]).trim()+'" tidak valid. Format yang benar contohnya S10005-0000000123.'); bad=true; }
+    else if(id.slice(1,6)!==String(storeCode)){ add('Baris '+rn+': SALESPERSON ID '+id+' bukan milik toko '+storeCode+'.'); bad=true; }
+    if(!nm){ add('Baris '+rn+': kolom NAMA kosong.'); bad=true; }
+    if(!/^ZONA \d+$/.test(zn)){ add('Baris '+rn+': kolom ZONA "'+String(r[3]).trim()+'" tidak valid. Tulis seperti ZONA 5.'); bad=true; }
+    else { if(!zonas.has(zn)) zonas.set(zn, rn); }
+    if(!bad){
+      if(seen.has(id)){ const o=seen.get(id); add('Baris '+rn+': SALESPERSON ID '+id+' sama dengan baris '+o.rn+' ('+o.nm+' dan '+nm+'). Satu ID hanya boleh satu baris, periksa salah satu ID.'); bad=true; }
+      else seen.set(id,{rn,nm});
+    }
+    const c = [];
+    for(let k=0;k<dim;k++){
+      const raw = String(r[4+k]).trim().toUpperCase();
+      if(raw===''){ add('Sel '+colName(4+k)+rn+' ('+(nm||'baris '+rn)+', tanggal '+(k+1)+') kosong. Isi kode jadwal, gunakan OFF untuk hari libur.'); bad=true; c.push(''); continue; }
+      if(!ZKODE.includes(raw)){ add('Sel '+colName(4+k)+rn+' ('+(nm||'baris '+rn)+', tanggal '+(k+1)+'): kode "'+String(r[4+k]).trim()+'" tidak dikenal. Kode yang boleh: '+ZKODE.join(', ')+'.'); bad=true; }
+      c.push(raw);
+    }
+    if(!bad) people.push({id, name:nm, brand:br, zona:zn, c});
+  }
+  if(zonas.size>1) add('Satu file hanya boleh berisi satu zona. Ditemukan: '+[...zonas].map(([z,rn])=>z+' (mulai baris '+rn+')').join(', ')+'.');
+  if(!zonas.size && !err.length) add('Tidak ada baris salesperson di file ini.');
+  if(err.length) throw Object.assign(new Error(err.join('\n')),{list:err});
+  const zona = [...zonas.keys()][0];
+  // 4. pemeriksaan silang dengan daftar salesperson yang sudah ada
+  const mp = new Map(((master&&master.people)||[]).map(p=>[p.id,p]));
+  const diffZ = people.filter(p=>mp.has(p.id) && normZona(mp.get(p.id).zona||'')!=='' && normZona(mp.get(p.id).zona)!==zona);
+  if(diffZ.length){
+    diffZ.slice(0,8).forEach(p=>add(p.name+' ('+p.id+') terdaftar di '+normZona(mp.get(p.id).zona)+', bukan '+zona+'. Jika memang pindah zona, minta admin memperbarui zonasi di file jadwal & target.'));
+    if(diffZ.length>8) add('…dan '+(diffZ.length-8)+' salesperson lain yang zonanya berbeda.');
+    throw Object.assign(new Error(err.join('\n')),{list:err});
+  }
+  const nw = people.filter(p=>!mp.has(p.id));
+  if(nw.length) warn.push(nw.length+' salesperson baru ('+nw.slice(0,5).map(p=>p.name).join(', ')+(nw.length>5?', …':'')+') belum punya target. Minta admin melengkapi lewat file jadwal & target.');
+  const nmDiff = people.filter(p=>mp.has(p.id) && mp.get(p.id).name && clean(mp.get(p.id).name).toUpperCase()!==p.name.toUpperCase());
+  if(nmDiff.length) warn.push(nmDiff.length+' nama berbeda dari data tersimpan ('+nmDiff.slice(0,4).map(p=>mp.get(p.id).name+' → '+p.name).join(', ')+(nmDiff.length>4?', …':'')+'). Nama di file ini dipakai.');
+  const gone = ((master&&master.people)||[]).filter(p=>normZona(p.zona||'')===zona && !seen.has(p.id));
+  if(gone.length) warn.push(gone.length+' orang di '+zona+' tidak ada di file ini ('+gone.slice(0,5).map(p=>p.name).join(', ')+(gone.length>5?', …':'')+'), jadwalnya tidak diubah.');
+  const pre = y+'-'+pad(m)+'-';
+  return {zona, y, m, month:y+'-'+pad(m), dates:[...Array(dim)].map((_,i)=>pre+pad(i+1)), people, warnings:warn, newCount:nw.length};
+}
+/* Menggabungkan jadwal satu zona ke dokumen jadwal: hanya kode jadwal (dan nama, brand) orang di file yang berubah, target tidak disentuh. */
+function mergeZona(doc, z, source, now){
+  const base = (doc && Array.isArray(doc.people)) ? doc : {basis:'sched1', dates:[], people:[]};
+  const od = Array.isArray(base.dates) ? base.dates : [];
+  const nd = [...new Set([...od, ...z.dates])].sort();
+  const oi = new Map(od.map((d,i)=>[d,i])), zi = new Map(z.dates.map((d,i)=>[d,i]));
+  const byId = new Map(z.people.map(p=>[p.id,p]));
+  const people = base.people.map(e=>{
+    const f = byId.get(e.id), oc = Array.isArray(e.c)?e.c:[];
+    const c = nd.map(d=>{ if(f && zi.has(d)) return f.c[zi.get(d)]; return oi.has(d) ? (oc[oi.get(d)]||'') : ''; });
+    return f ? Object.assign({}, e, {name:f.name, brand:f.brand||e.brand||'', zona:f.zona, c}) : Object.assign({}, e, {c});
+  });
+  const have = new Set(base.people.map(e=>e.id));
+  z.people.forEach(f=>{ if(have.has(f.id)) return; people.push({id:f.id, name:f.name, brand:f.brand, cat:'', zona:f.zona, tpd:0, tpm:0, c:nd.map(d=>zi.has(d)?f.c[zi.get(d)]:'')}); });
+  const zones = Object.assign({}, base.zones||{}, {[z.zona]:{month:z.month, source, uploadedAt:now, n:z.people.length}});
+  return Object.assign({}, base, {basis:'sched1', dates:nd, people, zones});
+}
+if(typeof module!=='undefined') module.exports = {parseReport, parseSchedule, parseZona, mergeZona, isZonaFile};
 
 let P = [], M = {}, H = [], days = {}, dates = [];
 const fmtN = new Intl.NumberFormat('id-ID');
@@ -1216,12 +1317,29 @@ function ckItems(){
   mk('item','Detail item per salesperson (pop up)','File: Sales Detail Report (kolom Item No, Item Name, Qty)',itBad,null,'Lengkap sampai '+ckLab(P.ref),itBad.length+' tanggal belum ada atau perlu unggah ulang',
     [miss.length?'Belum ada: '+ckDates(miss):'',itOld.length?'Perlu diunggah ulang (data lama belum memuat detail item): '+ckDates(itOld):'',!itBad.length?'Semua tanggal memuat detail item.':'','Isi: category, master brand, no item, deskripsi, qty, dan value per salesperson.'],['sales']);
   const ms=hasS? exp.filter(d=>!sd.has(d)) : exp;
-  mk('sched','Jadwal dan target salesperson','File: jadwal & target (kolom SALES ID, TARGET/DAY, lalu kolom tanggal)',ms,null,hasS? SCH.people.length+' orang, sampai '+ckLab(SCH.dates[SCH.dates.length-1]) : '',hasS? ms.length+' tanggal belum ada di jadwal' : 'Belum ada file jadwal',
+  mk('sched','Target dan daftar salesperson (admin, bulanan)','File: jadwal & target (kolom SALES ID, TARGET/DAY, lalu kolom tanggal)',ms,null,hasS? SCH.people.length+' orang, sampai '+ckLab(SCH.dates[SCH.dates.length-1]) : '',hasS? ms.length+' tanggal belum ada di jadwal' : 'Belum ada file jadwal',
     [hasS? (ms.length?'Belum ada di jadwal: '+ckDates(ms):'Semua tanggal 1 sampai '+ckLab(P.ref)+' ada di jadwal.') : 'Belum ada jadwal & target.','Isi: kode jadwal harian (S/P/M/OFF dst), zonasi, master brand, category, TARGET/DAY dan TARGET/MONTH.'],['sched']);
+  // Jadwal harian dipisah per zona: diunggah masing-masing TL zonasi
+  const zk=new Set(); ((SCH&&SCH.people)||[]).forEach(e=>{ if(e.zona) zk.add(normZona(e.zona)); }); Object.keys((SCH&&SCH.zones)||{}).forEach(k=>zk.add(k));
+  const zs=[...zk].sort((a,b)=>(parseInt(a.replace(/\D/g,''))||0)-(parseInt(b.replace(/\D/g,''))||0)||a.localeCompare(b)), ymk=P.y+'-'+z(P.m);
+  zs.forEach(zn=>{
+    const zi=(SCH&&SCH.zones&&SCH.zones[zn])||null, okM=!!(zi&&zi.month===ymk), nz=((SCH&&SCH.people)||[]).filter(e=>normZona(e.zona||'')===zn).length;
+    const when=zi&&zi.uploadedAt? new Date(zi.uploadedAt).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
+    const ml=zi&&zi.month? CKMON[+zi.month.slice(5,7)-1]+' '+zi.month.slice(0,4) : '';
+    mk('z:'+zn,'Jadwal '+zn+' (TL zonasi)','File: ABSENSI '+zn+' (kolom SALESPERSON ID, NAMA, BRAND, ZONA, lalu tanggal 1 sampai akhir bulan)',okM?[]:[1],null,
+      okM? 'Diunggah '+when+' · '+zi.n+' orang' : '', zi&&zi.month? 'Terakhir untuk '+ml+', belum ada untuk '+CKMON[P.m-1]+' '+P.y : 'Belum diunggah untuk '+CKMON[P.m-1]+' '+P.y,
+      [okM? 'Sumber: '+(zi.source||'-')+' ('+zi.n+' orang). '+nz+' orang tercatat di '+zn+'.' : 'TL '+zn+' belum mengunggah jadwal '+CKMON[P.m-1]+' '+P.y+'.',
+       'Format baku: baris 1 = SALESPERSON ID, NAMA, BRAND, ZONA, 1, 2, 3 … sampai akhir bulan. Nama sheet berisi bulan dan tahun (contoh NOVEMBER 2026). Kode: '+ZKODE.join(', ')+'. File yang tidak sesuai ditolak beserta alasannya.'],['zona:'+zn]);
+  });
   return out;
 }
 function tplSheet(kind,y,m){
   const z=n=>String(n).padStart(2,'0'), dim=new Date(y,m,0).getDate(), ds=[...Array(dim)].map((_,i)=>y+'-'+z(m)+'-'+z(i+1));
+  if(kind.startsWith('zona:')){
+    const zn=kind.slice(5), idx=new Map(((SCH&&SCH.dates)||[]).map((d,i)=>[d,i]));
+    const ppl=((SCH&&SCH.people)||[]).filter(e=>normZona(e.zona||'')===zn);
+    return {name:ZBLN[m-1]+' '+y, rows:[['SALESPERSON ID','NAMA','BRAND','ZONA',...ds.map((_,i)=>i+1)],...ppl.map(e=>[e.id,e.name,e.brand||'',zn,...ds.map(d=>idx.has(d)?(e.c[idx.get(d)]||''):'')])]};
+  }
   if(kind==='sales') return {name:'Sales Detail',rows:[['Receipt Date','Receipt No','Store No','Time','Salescode ID','Salescode Name','Category','Master Brand','Master Type Brand','Item No','Item Name','Qty','Amount Include Sales','Dicount Amount','Amount Exclude Sales']]};
   return {name:'Jadwal '+CKMON[m-1]+' '+y,rows:[['No','Sales ID','Nama','Master Brand','Category','Zonasi','Target/Month','Target/Day',...ds]]};
 }
@@ -1230,11 +1348,11 @@ async function dlTpl(kinds){
   if(!window.XLSX){ setStatus('Pembaca Excel belum termuat. Coba lagi sebentar.','err'); return; }
   const P=ckPeriod(), wb=XLSX.utils.book_new();
   kinds.forEach(k=>{ const t=tplSheet(k,P.y,P.m); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(t.rows),t.name); });
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(TPLGUIDE),'Petunjuk');
+  if(!kinds[0].startsWith('zona:')) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(TPLGUIDE),'Petunjuk');
   const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
   const blob=new Blob([out],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
-  const nm={sales:'sales-detail',sched:'jadwal'};
-  try{ await saveBlob(blob,'template-'+(kinds.length>1?'semua':nm[kinds[0]])+'-'+P.y+'-'+String(P.m).padStart(2,'0')+'.xlsx'); }catch(e){ setStatus('Template gagal diunduh.','warn'); }
+  const nm={sales:'sales-detail',sched:'jadwal'}, k0=kinds[0], zf=k0.startsWith('zona:')? 'jadwal-'+k0.slice(5).toLowerCase().replace(/\s+/g,'-') : null;
+  try{ await saveBlob(blob,(zf? zf : 'template-'+(kinds.length>1?'semua':nm[k0]))+'-'+P.y+'-'+String(P.m).padStart(2,'0')+'.xlsx'); }catch(e){ setStatus('Template gagal diunduh.','warn'); }
 }
 function renderChecklist(){
   if(!$('ckBtn')) return;
@@ -1243,13 +1361,13 @@ function renderChecklist(){
   $('ckBtn').className='ckbtn '+worst; $('ckBtn').innerHTML='<span class="ckdot"></span>Checklist database <b>'+nOk+'/'+it.length+'</b>';
   const ic={ok:'✓',warn:'!',bad:'✕'}, esc2=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   $('ckList').innerHTML=it.map((x,i)=>'<li class="ckrow '+x.state+(CKOPEN[x.id]?' open':'')+'"><button type="button" class="ckhead" data-ck="'+x.id+'" aria-expanded="'+!!CKOPEN[x.id]+'"><span class="ckic">'+ic[x.state]+'</span><span class="cktx"><b>'+(i+1)+'. '+x.title+'</b><small>'+esc2(x.summary)+'</small></span><span class="ckch">▾</span></button>'
-    +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="1">Unggah file</button>':'')+'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh template</button></div></div></li>').join('');
+    +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="'+(x.id.startsWith('z:')?x.id.slice(2):'1')+'">'+(x.id.startsWith('z:')?'Unggah jadwal zona':'Unggah file')+'</button>':'')+'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh '+(x.id.startsWith('z:')?'format zona (terisi)':'template')+'</button></div></div></li>').join('');
   $('ckSub').textContent='Periode '+CKMON[P.m-1]+' '+P.y+', sampai '+ckLab(P.ref)+' (mengikuti tanggal "Sampai")';
 }
 document.addEventListener('click',e=>{
   const b=e.target.closest('#ckBtn'); if(b){ const o=$('ckPanel').hidden; $('ckPanel').hidden=!o; b.setAttribute('aria-expanded',String(o)); return; }
   const h=e.target.closest('.ckhead'); if(h){ CKOPEN[h.dataset.ck]=!CKOPEN[h.dataset.ck]; renderChecklist(); return; }
-  const u=e.target.closest('[data-up]'); if(u){ $('file').click(); return; }
+  const u=e.target.closest('[data-up]'); if(u){ ZEXP=u.dataset.up==='1'?null:u.dataset.up; $('file').click(); return; }
   const t=e.target.closest('[data-tpl]'); if(t){ const it=ckItems().find(x=>x.id===t.dataset.tpl); if(it) dlTpl(it.tpl); return; }
   if(e.target.closest('#ckAll')){ dlTpl(['sales','sched']); return; }
   if(!e.target.closest('#ckPanel') && $('ckPanel') && !$('ckPanel').hidden){ $('ckPanel').hidden=true; $('ckBtn').setAttribute('aria-expanded','false'); }
@@ -1258,7 +1376,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('ckPanel')&&!$('
 function renderDataBar(){
   const n=dates.length, f=o=>fd(o,{day:'numeric',month:'short',year:'numeric'});
   $('db-title').textContent = n? n+' hari data · '+f(dates[0])+(n>1?' sampai '+f(dates[n-1]):'') : 'Belum ada data';
-  $('db-sub').textContent = 'Unggah laporan Sales Detail atau file jadwal & target (.xlsx, .xls, .csv), bisa lebih dari satu file. Tanggal penjualan yang sudah ada akan diganti.'+(dbReady?' Data tersimpan di Supabase dan langsung tampil di semua perangkat tim.':' Data belum tersambung ke penyimpanan.');
+  $('db-sub').textContent = 'Unggah laporan Sales Detail atau file jadwal & target (.xlsx, .xls, .csv), bisa lebih dari satu file. Jadwal per zona (format ABSENSI ZONA) diunggah TL zonasi lewat Checklist database. Tanggal penjualan yang sudah ada akan diganti.'+(dbReady?' Data tersimpan di Supabase dan langsung tampil di semua perangkat tim.':' Data belum tersambung ke penyimpanan.');
   if(canWrite===false) $('db-sub').textContent='Peran Anda viewer, jadi hanya bisa melihat data. Untuk memperbarui data, minta admin mengubah peran Anda menjadi editor.';
   const s=SCH;
   $('sch-info').textContent = s.people.length? 'Jadwal & target: '+s.people.length+' orang · '+f(s.dates[0])+(s.dates.length>1?' sampai '+f(s.dates[s.dates.length-1]):'')+(s.source?' · '+s.source:'') : 'Belum ada jadwal & target. Unggah file jadwal untuk menampilkan kolom target.';
@@ -1284,22 +1402,51 @@ async function persist(ds, sched){
   if(!fail) await loadAll();
   return fail? dbErr(last)+' '+fail+' bagian belum tersimpan.' : '';
 }
+let ZEXP=null;
+async function saveZona(z, source){
+  const code=D.code;
+  for(let t=0;t<6;t++){
+    const {data:row,error:e0}=await SB.from('dashboard_schedule').select('doc,uploaded_at').eq('store_code',code).maybeSingle();
+    if(e0) throw e0;
+    const now=new Date().toISOString(), doc=mergeZona(row&&row.doc,z,source,now);
+    if(!row){
+      const {error}=await SB.from('dashboard_schedule').insert({store_code:code,doc,source:null,uploaded_at:now});
+      if(!error) return doc; if(error.code!=='23505') throw error; continue;
+    }
+    const {data,error}=await SB.from('dashboard_schedule').update({doc,uploaded_at:now}).eq('store_code',code).eq('uploaded_at',row.uploaded_at).select('store_code');
+    if(error) throw error;
+    if(data&&data.length) return doc;
+    await new Promise(r=>setTimeout(r,150+Math.random()*250));
+  }
+  throw new Error('Jadwal sedang diperbarui pengguna lain. Coba unggah lagi sebentar lagi.');
+}
+async function handleZona(f, buf){
+  let z;
+  try{ z=parseZona(window.XLSX, buf, D.code, effectiveSched()); }
+  catch(e){ return {ok:false, msg:'DITOLAK: '+f.name+'\n'+(e&&e.message||'format tidak sesuai')+'\nFile tidak disimpan. Perbaiki file, lalu unggah lagi.'}; }
+  if(ZEXP && z.zona!==ZEXP) return {ok:false, msg:'DITOLAK: '+f.name+'\nFile ini berisi '+z.zona+', tetapi Anda mengunggah dari baris '+ZEXP+'. Pilih file yang benar.\nFile tidak disimpan.'};
+  if(!SB) return {ok:false, msg:'DITOLAK: '+f.name+'\nPenyimpanan belum tersedia.'};
+  try{ await saveZona(z, f.name); }
+  catch(e){ return {ok:false, msg:'GAGAL MENYIMPAN: '+f.name+'\n'+((e&&e.code)?dbErr(e):(e&&e.message)||'coba lagi')}; }
+  return {ok:true, msg:'Jadwal '+z.zona+' '+CKMON[z.m-1]+' '+z.y+' tersimpan: '+z.people.length+' orang ('+f.name+').'+(z.warnings.length?'\nCatatan:\n- '+z.warnings.join('\n- '):'')};
+}
 let busy=false;
 async function handleFiles(list){
   const files=[...list]; if(!files.length||busy) return;
   if(!canWrite){ setStatus('Peran Anda hanya bisa melihat data.','warn'); return; }
   if(!window.XLSX){ setStatus('Pembaca Excel gagal dimuat. Periksa koneksi, lalu muat ulang halaman.','err'); return; }
   busy=true; $('upload').disabled=true;
-  const found={}, notes=[]; let used=0, newSched=null;
+  const found={}, notes=[], zres=[]; let used=0, newSched=null;
   for(const f of files){
     try{
       setStatus('Membaca '+f.name+'…');
       const buf=await f.arrayBuffer();
+      if(isZonaFile(window.XLSX,buf)){ zres.push(await handleZona(f,buf)); continue; }
       let r=null;
       try{ r=parseReport(window.XLSX, buf, D.code); }
       catch(e){
         if(!/Receipt Date/.test(e&&e.message||'')) throw e;
-        try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); newSched=sc; continue; }
+        try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); const cz=effectiveSched(); if(cz&&cz.zones) sc.zones=cz.zones; newSched=sc; continue; }
         catch(e2){ throw new Error('format tidak dikenali (bukan laporan Sales Detail dan bukan file jadwal & target)'); }
       }
       for(const d in r.days) found[d]=Object.assign(r.days[d],{source:f.name,uploadedAt:new Date().toISOString()});
@@ -1310,7 +1457,13 @@ async function handleFiles(list){
     }catch(e){ notes.push(f.name+': '+(e&&e.message||'gagal dibaca')); }
   }
   const ds=Object.keys(found).sort();
-  if(!ds.length && !newSched){ setStatus('Tidak ada data yang bisa dimuat. '+notes.join(' '),'err'); busy=false; $('upload').disabled=false; return; }
+  const zmsg=zres.map(x=>x.msg).join('\n\n'), zbad=zres.some(x=>!x.ok);
+  if(zres.some(x=>x.ok)) await loadAll();
+  if(!ds.length && !newSched){
+    if(zres.length){ setStatus(zmsg+(notes.length?'\n'+notes.join(' '):''), zbad?'err':'ok'); }
+    else setStatus('Tidak ada data yang bisa dimuat. '+notes.join(' '),'err');
+    ZEXP=null; busy=false; $('upload').disabled=false; return;
+  }
   ds.forEach(d=>{ localOverlay[d]=found[d]; });
   if(newSched) localSched=newSched;
   rebuild(true);
@@ -1319,8 +1472,8 @@ async function handleFiles(list){
   if(newSched) parts.push('jadwal & target '+newSched.people.length+' orang');
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'. Menyimpan…');
   const err=await persist(ds, newSched);
-  setStatus('Dashboard diperbarui: '+parts.join('; ')+'.'+(err? ' '+err : (dbRef?' Tersimpan.':''))+(notes.length?' '+notes.join(' '):''), err||notes.length?'warn':'ok');
-  busy=false; $('upload').disabled=false;
+  setStatus('Dashboard diperbarui: '+parts.join('; ')+'.'+(err? ' '+err : (dbRef?' Tersimpan.':''))+(notes.length?' '+notes.join(' '):'')+(zmsg?'\n\n'+zmsg:''), err||notes.length||zbad?'warn':'ok');
+  ZEXP=null; busy=false; $('upload').disabled=false;
 }
 async function removeDate(d){
   delete localOverlay[d];
@@ -1331,7 +1484,7 @@ async function removeDate(d){
   setStatus('Data '+fd(d)+' dihapus.','ok');
   await loadAll();
 }
-$('upload').addEventListener('click',()=>$('file').click());
+$('upload').addEventListener('click',()=>{ ZEXP=null; $('file').click(); });
 $('file').addEventListener('change',e=>{ handleFiles(e.target.files); e.target.value=''; });
 $('manage').addEventListener('click',()=>{ const p=$('manage-panel'); p.hidden=!p.hidden; $('manage').setAttribute('aria-expanded',String(!p.hidden)); });
 let armed=null, armT=0;
