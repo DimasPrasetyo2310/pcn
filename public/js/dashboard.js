@@ -1026,7 +1026,7 @@ function mvStat(L){ const s={n:0,q:0,tn:0,tq:0,dn:0,dq:0,an:0,unk:0}; L.forEach(
 async function mvLoad(key){
   MV.key=key; MV.busy=true; MV.err=''; const d=MV.d;
   const { data, error } = await SB.rpc('mv_report',{p_store:D.code,p_date:d});
-  MV.busy=false; if(MV.d!==d){ MV.key=''; mvRender(); return; }
+  MV.busy=false; if(MV.d!==d||MV.again){ MV.again=false; MV.key=''; mvRender(); return; }
   if(error||!data||!data.ok){ MV.data=null; MV.err='Data movement belum bisa dimuat'+(error?' ('+(error.message||error.code)+')':'')+'.'; MV.key=''; } else MV.data=data;
   mvDraw(); if(MVP&&!$('kpop').hidden) mvPopDraw();
 }
@@ -1037,7 +1037,7 @@ function mvRender(){
   if(!MV.d||!dates.includes(MV.d)) MV.d=dates[dates.length-1];
   $('mv-date').innerHTML=dates.slice().reverse().map(x=>'<option value="'+x+'"'+(x===MV.d?' selected':'')+'>'+esc(fd(x,{weekday:'short',day:'numeric',month:'short'}))+'</option>').join('');
   const key=MV.d+'|'+MV.ver+'|'+((days[MV.d]&&days[MV.d].uploadedAt)||'');
-  if(MV.key!==key&&!MV.busy){ MV.data=null; mvDraw(); mvLoad(key); } else mvDraw();
+  if(MV.key!==key&&!MV.busy){ MV.data=null; mvDraw(); mvLoad(key); } else { if(MV.busy&&MV.key!==key) MV.again=true; mvDraw(); }
 }
 function mvDraw(){
   const b=$('mv-body'); if(!b) return;
