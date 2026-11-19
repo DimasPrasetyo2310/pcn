@@ -81,7 +81,8 @@
 .mbs small{display:block;font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--ink3)}.mbs b{display:block;font-size:22px;margin:4px 0 2px;font-variant-numeric:tabular-nums}.mbs span{font-size:12.5px;color:var(--ink2)}
 #mb-cmp{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}#mb-cmp h3{margin:0 0 8px;font-size:14.5px}.cmp .cr{display:flex;justify-content:space-between;gap:10px;font-size:14px}.cmp .cbar{height:12px;background:#e6eaf2;border-radius:99px;overflow:hidden;margin:6px 0}.cmp .cbar i{display:block;height:100%;background:var(--navy);border-radius:99px}
 @media (max-width:520px){main{padding:12px 10px 32px}.card{padding:14px}table{font-size:11.5px}th{padding:8px 3px;font-size:9.5px;letter-spacing:0}td{padding:8px 3px}.tw{margin-left:-6px;margin-right:-6px}.pill{min-width:28px;padding:1px 5px}}
-  </style>
+  .hdb{display:flex;gap:8px;flex:none}
+</style>
 </head>
 <body>
   <header class="top"><b>MITRA10 Percetakan Negara</b><span>Pencapaian Salesperson · Toko 10005</span></header>
@@ -119,7 +120,7 @@
       </div>
 
       <div class="card" id="mv-card" hidden>
-        <h2>Task Order Movement</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h2>Task Order Movement</h2><button type="button" id="mv-shot" data-noshot title="Simpan sebagai gambar HD (PNG)" style="border:1px solid #d5dbe6;background:#fff;border-radius:8px;padding:6px 10px;font-size:13px">📷 Print screen</button></div>
         <p class="note" style="margin:4px 0 8px">Item yang Anda jual, dicocokkan dengan Stock Movement gudang. Wajib movement: Cash&amp;Carry via Pickup &amp; Delivery, Cash&amp;Carry via Gudang Store, dan Bawa Langsung.</p>
         <div id="mv-inner"></div>
       </div>
@@ -153,12 +154,13 @@
     </section>
   </main>
   <div class="ovl" id="pop" hidden role="dialog" aria-modal="true" aria-labelledby="pop-t"><div class="dlg">
-    <div class="hd"><div><h2 id="pop-t"></h2><div class="per" id="pop-per"></div></div><button type="button" class="x" id="pop-x" aria-label="Tutup">×</button></div>
+    <div class="hd"><div><h2 id="pop-t"></h2><div class="per" id="pop-per"></div></div><span class="hdb" data-noshot><button type="button" class="x" id="pop-shot" title="Print screen HD (PNG)" aria-label="Print screen" style="font-size:16px">📷</button><button type="button" class="x" id="pop-x" aria-label="Tutup">×</button></span></div>
     <div class="bd" id="pop-body"></div>
   </div></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
+  <script src="js/shot.js"></script>
   <script src="js/salesperson.js"></script>
 </body>
 </html>

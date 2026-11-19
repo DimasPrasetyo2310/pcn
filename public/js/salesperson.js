@@ -258,6 +258,8 @@ function init(){
     load(v,true);
   });
   initApprover();
+  $('mv-shot').addEventListener('click',()=>{ if(window.DomShot) DomShot($('mv-card'),'task-order-movement-'+(MVSEL||'')+'.png',{btn:$('mv-shot')}); });
+  $('pop-shot').addEventListener('click',()=>{ if(window.DomShot) DomShot(document.querySelector('#pop .dlg'),DomShot.slug($('pop-t').textContent)+'.png'); });
   $('mv-card').addEventListener('click',e=>{ const b=e.target.closest('button[data-mvt]'); if(b){ MVF=b.dataset.mvt; mvRender(); } });
   $('mv-card').addEventListener('change',e=>{ if(e.target&&e.target.id==='mv-d'){ MVSEL=e.target.value; mvRender(); } });
   $('ap-grid').addEventListener('click',e=>{ const b=e.target.closest('button[data-ap]'); if(b&&!b.disabled) apPin(b.dataset.ap==='1',b.dataset.k); });
