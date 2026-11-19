@@ -127,11 +127,12 @@ function itemsFor(dts,kind){
   return Object.values(m).sort((a,b)=>b[5]-a[5]);
 }
 const tc=s=>String(s||'').toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+function msTypes(dts){ const m={}; (MVD||[]).forEach(x=>{ if(dts.indexOf(x.d)<0) return; (x.l||[]).forEach(l=>{ const k=String(l[0]).replace(/^0+/,''), t=String(l[5]||'').trim(); if(!t) return; const a=m[k]||(m[k]=[]); if(a.indexOf(t)<0) a.push(t); }); }); return m; }
 function openPop(title,per,dts,kind){
-  const it=itemsFor(dts,kind),tq=it.reduce((s,e)=>s+e[4],0),ts=it.reduce((s,e)=>s+e[5],0);
+  const MT=msTypes(dts), it=itemsFor(dts,kind),tq=it.reduce((s,e)=>s+e[4],0),ts=it.reduce((s,e)=>s+e[5],0);
   $('pop-t').textContent=title;$('pop-per').textContent=per+' · penjualan tanpa PPN';
   const old=kind==='mb'&&PCTX.isPB&&!it.length&&(RD.sales||[]).some(x=>dts.includes(x.d)&&(Number(x.pb)||0)>0&&!x.pbc);
-  $('pop-body').innerHTML=old?'<p class="note" style="padding:16px">Data penjualan yang tersimpan belum memuat penanda Master type brand per item, jadi detail Private Brand belum bisa ditampilkan. Minta Team Leader upload ulang file penjualan (semua hari bulan ini) di dashboard, lalu detail ini akan terisi.</p>':it.length?'<table><thead><tr><th class="l">Category</th><th class="l">No Item</th><th class="l">Description</th><th>Qty</th><th>Value (Rp)</th></tr></thead><tbody>'+it.map(e=>'<tr><td class="l">'+esc(tc(e[0]))+'</td><td class="l">'+esc(e[2])+'</td><td class="w">'+esc(e[3])+'</td><td>'+rp(e[4])+'</td><td>'+rp(e[5])+'</td></tr>').join('')+'<tr class="tot"><td class="l" colspan="3">TOTAL ('+it.length+' item)</td><td>'+rp(tq)+'</td><td>'+rp(ts)+'</td></tr></tbody></table>':'<p class="note" style="padding:16px">Belum ada rincian item untuk periode ini.</p>';
+  $('pop-body').innerHTML=old?'<p class="note" style="padding:16px">Data penjualan yang tersimpan belum memuat penanda Master type brand per item, jadi detail Private Brand belum bisa ditampilkan. Minta Team Leader upload ulang file penjualan (semua hari bulan ini) di dashboard, lalu detail ini akan terisi.</p>':it.length?'<table><thead><tr><th class="l">Category</th><th class="l">No Item</th><th class="l">Description</th><th class="l">Type MS</th><th>Qty</th><th>Value (Rp)</th></tr></thead><tbody>'+it.map(e=>'<tr><td class="l">'+esc(tc(e[0]))+'</td><td class="l">'+esc(e[2])+'</td><td class="w">'+esc(e[3])+'</td><td class="l">'+esc((MT[String(e[2]).replace(/^0+/,'')]||['–']).join(', '))+'</td><td>'+rp(e[4])+'</td><td>'+rp(e[5])+'</td></tr>').join('')+'<tr class="tot"><td class="l" colspan="4">TOTAL ('+it.length+' item)</td><td>'+rp(tq)+'</td><td>'+rp(ts)+'</td></tr></tbody></table>':'<p class="note" style="padding:16px">Belum ada rincian item untuk periode ini.</p>';
   $('pop').hidden=false;$('pop-body').scrollTop=0;$('pop-x').focus();
 }
 function allDates(upTo){ return (RD.dates||[]).filter(d=>d<=upTo); }

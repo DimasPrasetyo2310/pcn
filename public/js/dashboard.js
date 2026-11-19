@@ -893,9 +893,18 @@ function spOpen(k){
   const m={}; dts.forEach(d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); if(q&&Array.isArray(q.it)) q.it.forEach(r=>{ if(kind){ const isMb=SPCTX.isPB?(r[6]===1&&SPCTX.ZCs.has(String(r[0]==null?'':r[0]).trim().toUpperCase())):(SPCTX.BR&&String(r[1]||'').trim().toUpperCase()===SPCTX.BR); if(kind==='mb'&&!isMb) return; if(kind==='non'&&isMb) return; } const key=r[2]||r[3]; const t=m[key]||(m[key]=[r[0],r[1],r[2],r[3],0,0]); t[4]+=r[4]; t[5]+=r[5]; }); });
   const it=Object.values(m).sort((a,b)=>b[5]-a[5]), tq=it.reduce((s,r)=>s+r[4],0), ts=it.reduce((s,r)=>s+r[5],0);
   const oldD=kind==='mb'&&SPCTX.isPB&&!it.length&&dts.some(d=>{ const q=days[d]&&(days[d].people||[]).find(x=>x.id===spSel); return q&&(+q.pb||0)>0&&!q.pbc; });
-  const html=oldD? '<p class="note" style="padding:14px 4px">Data penjualan yang tersimpan belum memuat penanda Master type brand per item, jadi detail Private Brand belum bisa ditampilkan. Minta Team Leader upload ulang file penjualan (semua hari bulan ini) di dashboard, lalu detail ini akan terisi.</p>' : it.length? '<table class="pt"><thead><tr><th>Category</th><th>No Item</th><th>Description</th><th class="rt">Qty</th><th class="rt">Value</th></tr></thead><tbody>'+it.map(r=>'<tr><td>'+esc(title(r[0]))+'</td><td class="num">'+esc(r[2])+'</td><td>'+esc(r[3])+'</td><td class="num rt">'+fmtN.format(r[4])+'</td><td class="num rt">'+fmtN.format(r[5])+'</td></tr>').join('')+'<tr class="tot"><td colspan="3"><b>TOTAL ('+it.length+' item)</b></td><td class="num rt"><b>'+fmtN.format(tq)+'</b></td><td class="num rt"><b>'+fmtN.format(ts)+'</b></td></tr></tbody></table>' : '<p class="note" style="padding:14px 4px">Belum ada rincian item untuk periode ini.</p>';
+  const html=oldD? '<p class="note" style="padding:14px 4px">Data penjualan yang tersimpan belum memuat penanda Master type brand per item, jadi detail Private Brand belum bisa ditampilkan. Minta Team Leader upload ulang file penjualan (semua hari bulan ini) di dashboard, lalu detail ini akan terisi.</p>' : it.length? '<table class="pt"><thead><tr><th>Category</th><th>No Item</th><th>Description</th><th>Type MS</th><th class="rt">Qty</th><th class="rt">Value</th></tr></thead><tbody>'+it.map(r=>'<tr><td>'+esc(title(r[0]))+'</td><td class="num">'+esc(r[2])+'</td><td>'+esc(r[3])+'</td><td class="mvty" data-mvi="'+esc(String(r[2]).replace(/^0+/,''))+'">'+(SB&&!TIM?'…':'–')+'</td><td class="num rt">'+fmtN.format(r[4])+'</td><td class="num rt">'+fmtN.format(r[5])+'</td></tr>').join('')+'<tr class="tot"><td colspan="4"><b>TOTAL ('+it.length+' item)</b></td><td class="num rt"><b>'+fmtN.format(tq)+'</b></td><td class="num rt"><b>'+fmtN.format(ts)+'</b></td></tr></tbody></table>' : '<p class="note" style="padding:14px 4px">Belum ada rincian item untuk periode ini.</p>';
   kShow(ttl,[['Salesperson',e.name||e.id],['Sales ID',e.id],['Zonasi',e.zona||'–'],['Total value','Rp '+fmtN.format(ts)]],html,null);
   $('kpop-per').textContent=per+' · sales exclude PPN';
+  spTypeFill(dts,spSel);
+}
+const MVC={};
+async function spTypeFill(dts,sid){
+  const cells=Array.from(document.querySelectorAll('#kpop-body td.mvty')); if(!cells.length||!SB||TIM) return;
+  const m={};
+  await Promise.all(dts.map(async d=>{ if(!MVC[d]){ try{ const {data}=await SB.rpc('mv_report',{p_store:D.code,p_date:d}); MVC[d]=(data&&data.ok)?(data.lines||[]):[]; }catch(e){ MVC[d]=[]; } }
+    MVC[d].forEach(l=>{ if(l[0]!==sid) return; const k=String(l[1]).replace(/^0+/,''), t=String(l[6]||'').trim(); if(!t) return; const a=m[k]||(m[k]=[]); if(a.indexOf(t)<0) a.push(t); }); }));
+  cells.forEach(td=>{ if(td.isConnected) td.textContent=(m[td.dataset.mvi]||['–']).join(', '); });
 }
 document.addEventListener('click',ev=>{ const c=ev.target.closest&&ev.target.closest('#sp-body [data-spd]'); if(!c) return; spOpen(c.dataset.spd); });
 document.addEventListener('keydown',ev=>{ if(ev.key==='Enter'&&ev.target.matches&&ev.target.matches('#sp-body [data-spd][role=button]')) spOpen(ev.target.dataset.spd); });
@@ -1618,7 +1627,7 @@ async function handleFiles(list){
   if(newMoves) parts.push('Stock Movement '+movRows+' baris ('+Object.keys(newMoves).sort().map(d=>fd(d,{day:'numeric',month:'short'})).join(', ')+')');
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'. Menyimpan…');
   let err=await persist(ds, newSched);
-  if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves); if(e2) err=(err?err+' ':'')+e2; MV.ver++; mvRender(); }
+  if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves); if(e2) err=(err?err+' ':'')+e2; MV.ver++; Object.keys(MVC).forEach(k=>delete MVC[k]); mvRender(); }
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'.'+(err? ' '+err : (dbRef?' Tersimpan.':''))+(notes.length?' '+notes.join(' '):'')+(zmsg?'\n\n'+zmsg:''), err||notes.length||zbad?'warn':'ok');
   ZEXP=null; busy=false; $('upload').disabled=false;
 }
