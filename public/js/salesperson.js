@@ -236,7 +236,7 @@ function mvRender(){
     const q=Number(l[4]), a=Number(l[8])||0; let cl,st;
     if(!l[6]){ if(l[7]){ cl='ok'; st='✓ Auto'; } else { cl='wr'; st='? Type belum diketahui'; } }
     else if(a>=q){ cl='ok'; st='✓ Done'; } else { cl='no'; st=(a>0?'✕ Sebagian':'✕ Belum'); }
-    return '<div class="mvrow '+cl+'"><div><b>'+esc(l[1])+'</b><small>'+esc(l[0])+' · '+esc(l[2]||'Tanpa No Nota')+'</small><small>'+esc(l[5])+'</small></div><div class="q">'+mvq(q)+' qty<small>'+(l[6]?mvq(a)+' / '+mvq(q)+' · ':'')+st+'</small></div></div>'; }).join('')||'<p class="note">Tidak ada item pada filter ini.</p>';
+    return '<div class="mvrow '+cl+'"><div><b>'+esc(l[1])+'</b><small>'+esc(l[0])+' · '+esc(l[2]||'Tanpa No Nota')+'</small><small>'+esc(l[5])+'</small></div><div class="q">'+mvq(q)+' qty<small>'+(l[6]?'Tersedia di X333: '+mvq(Math.min(a,q))+' / '+mvq(q)+' · ':'')+st+'</small></div></div>'; }).join('')||'<p class="note">Tidak ada item pada filter ini.</p>';
   const tabs=[['all','Semua'],['belum','Belum'],['done','Sudah'],['auto','Auto']];
   $('mv-inner').innerHTML='<div class="mvhd"><label class="note">Tanggal <select id="mv-d">'+MVD.slice().reverse().map(x=>'<option value="'+x.d+'"'+(x.d===MVSEL?' selected':'')+'>'+esc(fd(x.d))+(x.d===today?' (hari ini)':'')+'</option>').join('')+'</select></label></div>'+bar+
     '<div class="mvsum"><div><small>Item terjual</small><b>'+L.length+'</b></div><div><small>Task order</small><b>'+tasks.length+'</b></div><div><small>Sudah movement</small><b>'+done.length+'</b></div><div><small>Belum movement</small><b>'+belum+'</b></div></div>'+
