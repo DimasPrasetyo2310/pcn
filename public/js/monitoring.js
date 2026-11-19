@@ -958,7 +958,7 @@ async function kcSalper(days){
     const need=days.filter(d=>!KCDOCS.has(d));
     if(need.length){const {data}=await SB.from('dashboard_days').select('sale_date,doc').eq('store_code',STORE).in('sale_date',need);(data||[]).forEach(r=>KCDOCS.set(r.sale_date,r.doc))}
     const sch=KCSCH; if(!sch||!Array.isArray(sch.people)||!Array.isArray(sch.dates)) return null;
-    let n=0,hi=0;
+    let n=0,hi=0; const list=[];
     sch.people.forEach(e=>{
       if(KCRS.includes(e.id)) return;
       const tpe=e.tpd>0?e.tpd:(e.tpm>0?e.tpm/30:0); if(!(tpe>0)) return;
@@ -967,8 +967,9 @@ async function kcSalper(days){
       if(!cov||!(t>0)) return;
       days.forEach(d=>{const doc=KCDOCS.get(d),pp=doc&&Array.isArray(doc.people)?doc.people.find(x=>x.id===e.id):null;if(pp)sl+=+pp.sales||0});
       n++; if(sl>=t) hi++;
+      list.push({name:e.name||e.id,zona:e.zona||'',cat:e.cat||'',t,sl,ach:sl/t});
     });
-    return n?{n,hi,pc:hi/n}:null;
+    return n?{n,hi,pc:hi/n,list}:null;
   })();
   KCSP.set(key,p); p.catch(()=>KCSP.delete(key)); return p;
 }
@@ -987,22 +988,104 @@ function kcRender(){
   const cls=x=>x==null?'':x<0?' kc-neg':' kc-pos';
   const pk=(arr,f,fmt)=>{if(!arr.length)return '–';const b=arr.reduce((m,d)=>f(d)>f(m)?d:m,arr[0]);return 'Tertinggi '+fd(b)+' · '+fmt(f(b))};
   const ld=(a,l,txt)=>l?'<div class="ly"><b class="'+(a>=l?'up':'dn')+'">'+(a>=l?'▲':'▼')+' '+dec(Math.abs(a/l-1)*100,1)+'%</b> <span>vs '+lyYear(W.s)+' · '+txt+'</span></div>':'';
-  const tile=(k,hero)=>'<div class="kpi'+(hero?' hero':'')+'"><div class="kh">'+ic(k.i)+'<span class="l">'+k.l+'</span></div><div class="vrow"><span class="v'+(k.c||'')+'">'+k.v+'</span>'+(k.extra||'')+'</div><span class="s">'+k.s+'</span>'+(k.sp?spark(k.sp):'')+(k.ly||'')+'<div class="pk">'+k.pk+'</div></div>';
+  const tile=(k,hero)=>'<div class="kpi'+(hero?' hero':'')+(KCSEL===k.k?' kcsel':'')+'" data-k="'+k.k+'" tabindex="0" role="button" aria-label="Lihat rincian '+k.l+'"><div class="kh">'+ic(k.i)+'<span class="l">'+k.l+'</span></div><div class="vrow"><span class="v'+(k.c||'')+'">'+k.v+'</span>'+(k.extra||'')+'</div><span class="s">'+k.s+'</span>'+(k.sp?spark(k.sp):'')+(k.ly||'')+'<div class="pk">'+k.pk+'</div></div>';
   const tiles=[
-    {i:'sales',l:'Growth Sales',v:gp(gS),c:cls(gS),s:'Rp '+nf.format(Math.round(sx))+' · LY Rp '+nf.format(Math.round(lsx)),sp:ds.map(d=>DM.get(d).sx),ly:ld(sx,lsx,'sales exclude tax'),pk:pk(ds,d=>DM.get(d).sx,x=>rp(x))},
-    {i:'invoice',l:'Growth Invoice',v:gp(gI),c:cls(gI),s:nf.format(tr)+' invoice · LY '+nf.format(ltr),sp:ds.map(d=>DM.get(d).tr),ly:ld(tr,ltr,'invoice NAV'),pk:pk(ds,d=>DM.get(d).tr,nf.format)},
-    {i:'basket',l:'Growth Basket Size',v:gp(gB),c:cls(gB),s:(bk?rp(bk):'–')+' · LY '+(bkL?rp(bkL):'–'),sp:ds.map(d=>{const r=DM.get(d);return r.tr?r.sx/r.tr:0}),ly:bk&&bkL?ld(bk,bkL,'sales ÷ invoice'):'',pk:pk(ds,d=>{const r=DM.get(d);return r.tr?r.sx/r.tr:0},x=>rp(x))},
-    {i:'target',l:'Cont Sales Project',v:pc(aP),extra:aP!=null?ring(aP):'',s:'Actual project Rp '+nf.format(Math.round(pa))+' ÷ Target sales '+(tMtd?'Rp '+nf.format(Math.round(tMtd)):'–'),sp:mDays.map(pj),ly:aMtd?'<div class="ly"><b>'+dec(pa/aMtd*100,1)+'%</b> <span>dari actual sales (Rp '+nf.format(Math.round(aMtd))+')</span></div>':'',pk:pk(mDays,pj,x=>rp(x))}
+    {k:'sales',i:'sales',l:'Growth Sales',v:gp(gS),c:cls(gS),s:'Rp '+nf.format(Math.round(sx))+' · LY Rp '+nf.format(Math.round(lsx)),sp:ds.map(d=>DM.get(d).sx),ly:ld(sx,lsx,'sales exclude tax'),pk:pk(ds,d=>DM.get(d).sx,x=>rp(x))},
+    {k:'invoice',i:'invoice',l:'Growth Invoice',v:gp(gI),c:cls(gI),s:nf.format(tr)+' invoice · LY '+nf.format(ltr),sp:ds.map(d=>DM.get(d).tr),ly:ld(tr,ltr,'invoice NAV'),pk:pk(ds,d=>DM.get(d).tr,nf.format)},
+    {k:'basket',i:'basket',l:'Growth Basket Size',v:gp(gB),c:cls(gB),s:(bk?rp(bk):'–')+' · LY '+(bkL?rp(bkL):'–'),sp:ds.map(d=>{const r=DM.get(d);return r.tr?r.sx/r.tr:0}),ly:bk&&bkL?ld(bk,bkL,'sales ÷ invoice'):'',pk:pk(ds,d=>{const r=DM.get(d);return r.tr?r.sx/r.tr:0},x=>rp(x))},
+    {k:'project',i:'target',l:'Cont Sales Project',v:pc(aP),extra:aP!=null?ring(aP):'',s:'Actual project Rp '+nf.format(Math.round(pa))+' ÷ Target sales '+(tMtd?'Rp '+nf.format(Math.round(tMtd)):'–'),sp:mDays.map(pj),ly:aMtd?'<div class="ly"><b>'+dec(pa/aMtd*100,1)+'%</b> <span>dari actual sales (Rp '+nf.format(Math.round(aMtd))+')</span></div>':'',pk:pk(mDays,pj,x=>rp(x))}
   ];
   box.innerHTML='<div class="kpis kc">'+tiles.map(t=>tile(t)).join('')
-    +tile({i:'traffic',l:'Acv Sales Person 100%',v:'<span id="kcSpC">…</span>',s:'<span id="kcSpA">menghitung…</span>',pk:'Salesperson dengan penjualan ≥ target jadwal kerja'},1)+'</div>'
-    +'<p class="hint" style="margin-top:10px">Periode '+fdy(KCR.from)+' sd '+fdy(KCR.to)+' ('+dl.length+' hari, default MTD). Growth dibandingkan tanggal yang sama tahun lalu ('+ds.length+' dari '+dl.length+' hari punya pembanding). Cont Sales Project = actual Sales Project ÷ target sales pada periode yang sama. Acv Sales Person 100% = porsi salesperson yang mencapai target jadwal kerja pada periode ini.</p>';
+    +tile({k:'acv',i:'traffic',l:'Acv Sales Person 100%',v:'<span id="kcSpC">…</span>',s:'<span id="kcSpA">menghitung…</span>',pk:'Salesperson dengan penjualan ≥ target jadwal kerja'},1)+'</div><div id="kcDetail" class="kcdet no-shot" hidden></div>'
+    +'<p class="hint" style="margin-top:10px">Klik kartu untuk melihat rincian harian dan grafiknya. Periode '+fdy(KCR.from)+' sd '+fdy(KCR.to)+' ('+dl.length+' hari, default MTD). Growth dibandingkan tanggal yang sama tahun lalu ('+ds.length+' dari '+dl.length+' hari punya pembanding). Cont Sales Project = actual Sales Project ÷ target sales pada periode yang sama. Acv Sales Person 100% = porsi salesperson yang mencapai target jadwal kerja pada periode ini.</p>';
+  const dayRow=(f)=>dl.map(d=>f(d));
+  KCD={dl,ds,
+    sales:{t:'Growth Sales',u:'Rp',cur:dayRow(d=>DM.get(d).sx),cmp:dayRow(d=>LYD.has(lyDate(d))?LYD.get(lyDate(d)).sx:null),a:'Tahun ini',b:'Tahun lalu',fmt:x=>rp(x),full:x=>nf.format(Math.round(x)),mode:'g',tot:sx,totB:lsx},
+    invoice:{t:'Growth Invoice',cur:dayRow(d=>DM.get(d).tr),cmp:dayRow(d=>LYD.has(lyDate(d))?LYD.get(lyDate(d)).tr:null),a:'Tahun ini',b:'Tahun lalu',fmt:x=>nf.format(Math.round(x)),full:x=>nf.format(Math.round(x)),mode:'g',tot:tr,totB:ltr},
+    basket:{t:'Growth Basket Size',cur:dayRow(d=>{const r=DM.get(d);return r.tr?r.sx/r.tr:null}),cmp:dayRow(d=>{const r=LYD.get(lyDate(d));return r&&r.tr?r.sx/r.tr:null}),a:'Tahun ini',b:'Tahun lalu',fmt:x=>rp(x),full:x=>nf.format(Math.round(x)),mode:'g',tot:bk,totB:bkL},
+    project:{t:'Cont Sales Project',cur:dayRow(pj),cmp:dayRow(d=>budgetDay(d)),a:'Actual project',b:'Target sales',fmt:x=>rp(x),full:x=>nf.format(Math.round(x)),mode:'c',tot:pa,totB:tMtd}};
+  kcDetail();
   const key=KCR.from+KCR.to;
   kcSalper(dl).then(r=>{if(KCR.from+KCR.to!==key||!$('kcSpA'))return;$('kcSpA').textContent=r?r.hi+' dari '+r.n+' salesperson mencapai target':'Belum ada data salesperson';$('kcSpC').textContent=r?dec(r.pc*100,1)+'%':'–'}).catch(()=>{if($('kcSpA')){$('kcSpA').textContent='Gagal memuat data salesperson';$('kcSpC').textContent='–'}});
 }
+let KCD=null, KCSEL=null, KCF='all';
+function kcChart(labels,series,fmt){
+  const W=900,H=280,L=70,R=30,T=16,B=34,n=labels.length;
+  const all=series.flatMap(x=>x.v).filter(x=>x!=null&&isFinite(x)); if(!all.length) return '<div class="empty">Tidak ada data pada rentang ini.</div>';
+  let mx=Math.max(...all), mn=Math.min(0,...all); if(mx===mn) mx=mn+1;
+  const X=i=>L+(n>1?i*(W-L-R)/(n-1):(W-L-R)/2), Y=v=>T+(H-T-B)*(1-(v-mn)/(mx-mn));
+  let g='';
+  for(let k=0;k<=4;k++){const v=mn+(mx-mn)*k/4,y=Y(v);g+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y.toFixed(1)+'" y2="'+y.toFixed(1)+'" class="gl"/><text x="'+(L-8)+'" y="'+(y+4).toFixed(1)+'" text-anchor="end" class="ax">'+fmt(v)+'</text>'}
+  const step=Math.max(1,Math.ceil(n/10));
+  labels.forEach((l,i)=>{if(i%step===0||i===n-1)g+='<text x="'+X(i).toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle" class="ax">'+l+'</text>'});
+  series.forEach(x=>{let d='';x.v.forEach((v,i)=>{if(v==null||!isFinite(v))return;d+=(i>0&&x.v[i-1]!=null&&isFinite(x.v[i-1])?'L':'M')+X(i).toFixed(1)+','+Y(v).toFixed(1)});
+    g+='<path d="'+d+'" fill="none" stroke="'+x.c+'" stroke-width="'+(x.dash?2.2:3.2)+'"'+(x.dash?' stroke-dasharray="7 5"':'')+' stroke-linejoin="round" stroke-linecap="round"/>'});
+  g+='<line id="kcX" class="cx" y1="'+T+'" y2="'+(H-B)+'" x1="0" x2="0" style="display:none"/>'+series.map((x,k)=>'<circle id="kcP'+k+'" r="5.5" fill="'+x.c+'" stroke="#fff" stroke-width="2" style="display:none"/>').join('');
+  g+='<rect id="kcHit" x="'+L+'" y="'+T+'" width="'+(W-L-R)+'" height="'+(H-T-B)+'" fill="transparent" style="touch-action:pan-y"/>';
+  const leg=series.map(x=>'<span><i style="background:'+x.c+(x.dash?';opacity:.7':'')+'"></i>'+x.n+'</span>').join('');
+  return {html:'<div class="kcleg">'+leg+'</div><div class="kcch"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Grafik harian">'+g+'</svg><div id="kcTip" class="kctip" hidden></div></div>',
+    bind(tipFn){
+      const hit=$('kcHit'),svg=hit.ownerSVGElement,tip=$('kcTip'),line=$('kcX');
+      const move=ev=>{const r=svg.getBoundingClientRect(),px=(ev.clientX-r.left)/r.width*W;
+        let i=n>1?Math.round((px-L)/((W-L-R)/(n-1))):0; i=Math.max(0,Math.min(n-1,i));
+        line.setAttribute('x1',X(i));line.setAttribute('x2',X(i));line.style.display='';
+        series.forEach((x,k)=>{const c=$('kcP'+k),v=x.v[i];if(v==null||!isFinite(v)){c.style.display='none';return}c.setAttribute('cx',X(i));c.setAttribute('cy',Y(v));c.style.display=''});
+        tip.innerHTML=tipFn(i);tip.hidden=false;
+        const cw=svg.parentElement.clientWidth,tw=tip.offsetWidth,left=X(i)/W*r.width;
+        tip.style.left=Math.max(4,Math.min(cw-tw-4,left-tw/2))+'px'};
+      const out=()=>{line.style.display='none';tip.hidden=true;series.forEach((x,k)=>{$('kcP'+k).style.display='none'})};
+      hit.addEventListener('pointermove',move);hit.addEventListener('pointerdown',move);hit.addEventListener('pointerleave',out);
+    }};
+}
+function kcDetail(){
+  const box=$('kcDetail'); if(!box) return;
+  if(!KCSEL||!KCD){box.hidden=true;box.innerHTML='';return}
+  const pc=x=>x==null||!isFinite(x)?'–':dec(x*100,1)+'%', gp=x=>x==null||!isFinite(x)?'–':(x>=0?'+':'−')+dec(Math.abs(x)*100,1)+'%', clsn=x=>x==null||!isFinite(x)?'':x<0?'kneg':'kpos';
+  const close='<button type="button" class="kcx" id="kcClose" aria-label="Tutup rincian">✕</button>';
+  if(KCSEL==='acv'){
+    box.hidden=false; box.innerHTML='<div class="kch"><h3>Acv Sales Person 100%</h3>'+close+'</div><div class="empty">Memuat data salesperson…</div>';
+    $('kcClose').addEventListener('click',()=>{KCSEL=null;kcRender()});
+    const key=KCR.from+KCR.to;
+    kcSalper(KCD.dl).then(r=>{
+      if(KCR.from+KCR.to!==key||KCSEL!=='acv'||!$('kcDetail')) return;
+      if(!r){box.innerHTML='<div class="kch"><h3>Acv Sales Person 100%</h3>'+close+'</div><div class="empty">Belum ada data salesperson.</div>';$('kcClose').addEventListener('click',()=>{KCSEL=null;kcRender()});return}
+      const hit=r.list.filter(x=>x.ach>=1).length, rows=r.list.filter(x=>KCF==='all'||(KCF==='hit'?x.ach>=1:x.ach<1)).sort((a,b)=>b.ach-a.ach);
+      const chip=(k,l)=>'<button type="button" class="chip kcf'+(KCF===k?' on':'')+'" data-f="'+k+'">'+l+'</button>';
+      box.innerHTML='<div class="kch"><h3>Acv Sales Person 100%</h3>'+close+'</div>'
+        +'<div class="kcsum"><div><b>'+hit+' / '+r.list.length+'</b><span>salesperson capai target</span></div><div><b>'+pc(hit/r.list.length)+'</b><span>Acv 100%</span></div></div>'
+        +'<div class="kcfil">'+chip('all','Semua ('+r.list.length+')')+chip('hit','Tercapai ('+hit+')')+chip('miss','Belum ('+(r.list.length-hit)+')')+'</div>'
+        +'<div class="kcsc"><table class="kcd"><thead><tr><th>#</th><th class="l">Salesperson</th><th>Zona</th><th>Target</th><th>Actual</th><th>Pencapaian</th></tr></thead><tbody>'
+        +rows.map((x,i)=>'<tr><td>'+(i+1)+'</td><td class="l">'+esc(x.name)+'</td><td>'+esc(x.zona||'–')+'</td><td>'+nf.format(Math.round(x.t))+'</td><td>'+nf.format(Math.round(x.sl))+'</td><td><div class="bar"><i style="width:'+Math.min(100,x.ach*100).toFixed(0)+'%" class="'+(x.ach>=1?'ok':'no')+'"></i><b>'+pc(x.ach)+'</b></div></td></tr>').join('')+'</tbody></table></div>';
+      $('kcClose').addEventListener('click',()=>{KCSEL=null;kcRender()});
+      box.querySelectorAll('.kcf').forEach(b=>b.addEventListener('click',()=>{KCF=b.dataset.f;kcDetail()}));
+    }).catch(()=>{box.innerHTML='<div class="kch"><h3>Acv Sales Person 100%</h3>'+close+'</div><div class="empty">Gagal memuat data salesperson.</div>'});
+    return;
+  }
+  const K=KCD[KCSEL], dl=KCD.dl, lab=dl.map(fd), isG=K.mode==='g';
+  const val=K.cur.filter(x=>x!=null), mxI=K.cur.reduce((m,v,i)=>v!=null&&(m<0||v>K.cur[m])?i:m,-1), mnI=K.cur.reduce((m,v,i)=>v!=null&&(m<0||v<K.cur[m])?i:m,-1);
+  const sumBox=(l,v,sub)=>'<div><b>'+v+'</b><span>'+l+(sub?' · '+sub:'')+'</span></div>';
+  const avg=KCSEL==='basket'?K.tot:(val.length?sum(val)/val.length:null);
+  const head=isG?sumBox('Total periode',KCSEL==='basket'?rp(K.tot||0):K.full(K.tot),'LY '+(KCSEL==='basket'?rp(K.totB||0):K.full(K.totB)))+sumBox('Growth',gp(K.totB?K.tot/K.totB-1:null),'')
+    :sumBox('Actual project',K.full(K.tot))+sumBox('Target sales',K.full(K.totB))+sumBox('Contribusi',pc(K.totB?K.tot/K.totB:null),'');
+  const stats=sumBox(KCSEL==='basket'?'Basket periode':'Rata-rata/hari',avg==null?'–':K.fmt(avg))+(mxI>=0?sumBox('Tertinggi',K.fmt(K.cur[mxI]),lab[mxI]):'')+(mnI>=0?sumBox('Terendah',K.fmt(K.cur[mnI]),lab[mnI]):'');
+  const ch=kcChart(lab,[{n:K.a,v:K.cur,c:'#1f5bd8'},{n:K.b,v:K.cmp,c:isG?'#8a96b0':'#f59e0b',dash:true}],K.fmt);
+  const rows=dl.map((d,i)=>{const a=K.cur[i],b=K.cmp[i],r=a!=null&&b?(isG?a/b-1:a/b):null;return '<tr><td class="l">'+fdy(d)+'</td><td>'+(a==null?'–':K.full(a))+'</td><td>'+(b==null?'–':K.full(b))+'</td><td class="'+(isG?clsn(r):'')+'">'+(isG?gp(r):pc(r))+'</td></tr>'}).join('');
+  box.hidden=false;
+  box.innerHTML='<div class="kch"><h3>'+K.t+' · rincian harian</h3>'+close+'</div>'
+    +'<div class="kcsum">'+head+stats+'</div>'
+    +(typeof ch==='string'?ch:ch.html)
+    +'<div class="kcsc"><table class="kcd"><thead><tr><th class="l">Tanggal</th><th>'+K.a+'</th><th>'+K.b+'</th><th>'+(isG?'Growth':'Contribusi')+'</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  if(typeof ch!=='string') ch.bind(i=>{const a=K.cur[i],b=K.cmp[i],r=a!=null&&b?(isG?a/b-1:a/b):null;return '<b>'+fdy(dl[i])+'</b><br>'+K.a+': '+(a==null?'–':K.full(a))+'<br>'+K.b+': '+(b==null?'–':K.full(b))+'<br>'+(isG?'Growth: ':'Contribusi: ')+(isG?gp(r):pc(r))});
+  $('kcClose').addEventListener('click',()=>{KCSEL=null;kcRender()});
+}
+if($('kcView')){
+  const pick=t=>{const k=t&&t.closest('.kpi[data-k]');if(!k)return;const v=k.dataset.k;KCSEL=KCSEL===v?null:v;kcRender();if(KCSEL){const d=$('kcDetail');if(d&&!d.hidden)d.scrollIntoView({behavior:'smooth',block:'nearest'})}};
+  $('kcView').addEventListener('click',e=>pick(e.target));
+  $('kcView').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){if(e.target.closest&&e.target.closest('.kpi[data-k]')){e.preventDefault();pick(e.target)}}});
+}
 if($('kcFrom')){$('kcFrom').addEventListener('change',e=>{if(!e.target.value)return;KCR.from=e.target.value;if(KCR.to<KCR.from){KCR.to=KCR.from;$('kcTo').value=KCR.to}kcRender()});
   $('kcTo').addEventListener('change',e=>{if(!e.target.value)return;KCR.to=e.target.value;if(KCR.from>KCR.to){KCR.from=KCR.to;$('kcFrom').value=KCR.from}kcRender()})}
-if($('kcShot')) $('kcShot').addEventListener('click',()=>runShot($('kcShot'),$('kcCard'),1000,'kpi-commercial-'+(KCR.to||'')+'.png'))
+if($('kcShot')) $('kcShot').addEventListener('click',()=>runShot($('kcShot'),$('kcCard'),1000,'kpi-commercial-'+(KCR.to||'')+'.png',c=>c.querySelectorAll('.kcsel').forEach(x=>x.classList.remove('kcsel'))))
 
 /* Daily Report Closing Region 1 (tabel, bisa disalin sebagai gambar) */
 const PARC=new Map();
