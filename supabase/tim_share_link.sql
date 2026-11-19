@@ -44,3 +44,11 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 
 -- migration sp_pin_anon_approval: sp_approvers(p_key) dan sp_approve_anon(p_key,p_code,p_kind,p_approver,p_pin,p_on) untuk approval di HP salesperson (pilih nama + PIN, tanggal = hari H WIB); trigger sp_appr_stamp membaca app.approver.
 -- migration sp_view_appr_by: sp_view_data.appr memuat tl_by/mod_by (nama) dan field today.
+
+
+-- ---- Task Order Movement (migrasi: movement_task_order) ----
+-- Tabel: mv_nav (np_no -> type NAV), mv_moves (qty Stock Movement per item per tanggal); RLS: baca = semua peran, tulis = admin/editor.
+-- _mv_lines(store,date): item terjual (people[].mv dan mvx di dashboard_days) + Type dari NAV; wajib movement = Cash&Carry via Pickup & Delivery,
+--   Cash&Carry via Gudang Store, dan Bawa Langsung (NP kosong); qty Stock Movement dibagi FIFO menurut jam penjualan.
+-- mv_report(store,date) untuk dashboard (login), sp_mv_view(key,code) untuk halaman salesperson (anon, 7 hari terakhir).
+-- Migrasi sp_appr_stamp_fix_anon: trigger sp_appr_stamp melewati cek peran bila app.approver diset (approval lewat HP salesperson).

@@ -153,6 +153,7 @@ async function load(code,fromForm){
     CODE=code;
     try{sessionStorage.setItem(SKEY,code)}catch(e){}
     render(r);
+    mvLoad(fromForm);
     clearInterval(timer);
     timer=setInterval(()=>{if(!document.hidden)load(CODE,false)},30000);
   }catch(e){
@@ -208,6 +209,39 @@ function apPin(on,k){
     o.hidden=true; render(RD); $('ap-msg').textContent=(on?'Approval ':'Pembatalan approval ')+k.toUpperCase()+' tersimpan.'; };
   $('pin-ok').onclick=go; inp.onkeydown=e=>{ if(e.key==='Enter') go(); };
 }
+
+// ---- Task Order Movement: item yang dijual vs Stock Movement gudang ----
+let MVD=null, MVSEL='', MVF='all', mvAt=0, mvBusy=false;
+const mvq=v=>nf.format(Math.round((Number(v)||0)*100)/100);
+async function mvLoad(force){
+  if(!SB||!CODE||mvBusy) return; if(!force&&Date.now()-mvAt<120000) return;
+  mvBusy=true; mvAt=Date.now();
+  try{ const {data}=await SB.rpc('sp_mv_view',{p_key:KEY,p_code:CODE}); if(data&&data.ok){ MVD=data.days||[]; } }catch(e){}
+  mvBusy=false; mvRender();
+}
+function mvRender(){
+  const card=$('mv-card'); if(!card) return;
+  if(!MVD||!MVD.length){ card.hidden=true; return; }
+  const today=apDay(); const ds=MVD.map(x=>x.d);
+  if(!MVSEL||!ds.includes(MVSEL)) MVSEL=ds.includes(today)?today:ds[ds.length-1];
+  const day=MVD.find(x=>x.d===MVSEL)||MVD[0], L=day.l||[];
+  const tasks=L.filter(l=>l[6]), done=tasks.filter(l=>(Number(l[8])||0)>=Number(l[4])), belum=tasks.length-done.length, auto=L.length-tasks.length;
+  const flt={all:()=>true,belum:l=>l[6]&&(Number(l[8])||0)<Number(l[4]),done:l=>l[6]&&(Number(l[8])||0)>=Number(l[4]),auto:l=>!l[6]};
+  const f=flt[MVF]?MVF:'all', cnt=k=>L.filter(flt[k]).length;
+  const bar=!tasks.length?'<div class="mvbar ok">✓ Tidak ada task order movement<small>Semua item Anda tidak memerlukan movement.</small></div>'
+    :belum===0?'<div class="mvbar ok">✓ Done · semua task order sudah di-movement<small>'+done.length+' dari '+tasks.length+' task order</small></div>'
+    :'<div class="mvbar no">✕ Belum selesai · '+belum+' task order belum di-movement<small>'+done.length+' dari '+tasks.length+' sudah di-movement'+(day.moves_n?'':' · report Stock Movement tanggal ini belum diupload')+'</small></div>';
+  const rows=L.slice().sort((a,b)=>{ const ra=a[6]?((Number(a[8])||0)<Number(a[4])?0:1):2, rb=b[6]?((Number(b[8])||0)<Number(b[4])?0:1):2; return ra-rb||String(a[1]).localeCompare(String(b[1])); }).filter(flt[f]).map(l=>{
+    const q=Number(l[4]), a=Number(l[8])||0; let cl,st;
+    if(!l[6]){ if(l[7]){ cl='ok'; st='✓ Auto'; } else { cl='wr'; st='? Type belum diketahui'; } }
+    else if(a>=q){ cl='ok'; st='✓ Done'; } else { cl='no'; st=(a>0?'✕ Sebagian':'✕ Belum'); }
+    return '<div class="mvrow '+cl+'"><div><b>'+esc(l[1])+'</b><small>'+esc(l[0])+' · '+esc(l[2]||'Tanpa No Nota')+'</small><small>'+esc(l[5])+'</small></div><div class="q">'+mvq(q)+' qty<small>'+(l[6]?mvq(a)+' / '+mvq(q)+' · ':'')+st+'</small></div></div>'; }).join('')||'<p class="note">Tidak ada item pada filter ini.</p>';
+  const tabs=[['all','Semua'],['belum','Belum'],['done','Sudah'],['auto','Auto']];
+  $('mv-inner').innerHTML='<div class="mvhd"><label class="note">Tanggal <select id="mv-d">'+MVD.slice().reverse().map(x=>'<option value="'+x.d+'"'+(x.d===MVSEL?' selected':'')+'>'+esc(fd(x.d))+(x.d===today?' (hari ini)':'')+'</option>').join('')+'</select></label></div>'+bar+
+    '<div class="mvsum"><div><small>Item terjual</small><b>'+L.length+'</b></div><div><small>Task order</small><b>'+tasks.length+'</b></div><div><small>Sudah movement</small><b>'+done.length+'</b></div><div><small>Belum movement</small><b>'+belum+'</b></div></div>'+
+    '<div class="mvt">'+tabs.map(t=>'<button type="button" data-mvt="'+t[0]+'"'+(f===t[0]?' class="on"':'')+'>'+t[1]+' <i>'+cnt(t[0])+'</i></button>').join('')+'</div>'+rows;
+  card.hidden=false;
+}
 function init(){
   if(!SB||!KEY){
     $('login').hidden=false;
@@ -223,6 +257,8 @@ function init(){
     load(v,true);
   });
   initApprover();
+  $('mv-card').addEventListener('click',e=>{ const b=e.target.closest('button[data-mvt]'); if(b){ MVF=b.dataset.mvt; mvRender(); } });
+  $('mv-card').addEventListener('change',e=>{ if(e.target&&e.target.id==='mv-d'){ MVSEL=e.target.value; mvRender(); } });
   $('ap-grid').addEventListener('click',e=>{ const b=e.target.closest('button[data-ap]'); if(b&&!b.disabled) apPin(b.dataset.ap==='1',b.dataset.k); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ const o=$('pin-ov'); if(o) o.hidden=true; } });
   $('pop-x').addEventListener('click',closePop);
