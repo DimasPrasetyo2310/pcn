@@ -1,0 +1,14 @@
+-- Kunci store (lisensi). Sudah diterapkan di proyek Supabase (migrasi "store_license_lock").
+-- Tujuan: data store lain TIDAK bisa ditulis ke database ini, meskipun oleh user terdaftar (editor/admin),
+-- kecuali pemilik dashboard memberi izin.
+--  * app_owner       : daftar email pemilik (hanya dibaca fungsi is_owner(); tanpa policy = tidak bisa diakses klien).
+--  * store_licenses  : daftar store yang diizinkan. Hanya pemilik yang bisa mengubah (RLS is_owner()).
+--  * trigger zz_store_license di SEMUA tabel ber-kolom store_code: tolak INSERT/UPDATE bila store belum 'approved'.
+--  * license_status(store): dipakai dashboard saat dibuka; bila ok=false tampil layar "Akses diblokir".
+-- Memberi izin store baru (jalankan di SQL Editor sebagai pemilik):
+--   insert into public.store_licenses(store_code,store_name,approved_by,note)
+--   values ('10xxx','MITRA10 Nama Store','dimasprasetyo2310@gmail.com','izin tertulis ...');
+-- Mencabut izin:  update public.store_licenses set status='revoked' where store_code='10xxx';
+-- Catatan: dashboard.js juga memakai konstanta D.code='10005' dan menolak file (Sales Detail, NAV, Stock Movement)
+-- yang berisi kode store lain. Untuk store lain perlu ubah D.code di salinan kodenya, dan itu pun tetap
+-- ditolak database sebelum ada izin di tabel store_licenses.

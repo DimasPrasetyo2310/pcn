@@ -248,6 +248,8 @@ function mergeZona(doc, z, source, now){
   const zones = Object.assign({}, base.zones||{}, {[z.zona]:{month:z.month, source, uploadedAt:now, n:z.people.length}});
   return Object.assign({}, base, {basis:'sched1', dates:nd, people, zones});
 }
+const OWNER_MSG='Dashboard ini hanya berizin untuk store 10005 (MITRA10 Percetakan Negara). Pemakaian untuk store/cabang lain diblokir kecuali dengan izin pemilik dashboard (Dimas Prasetyo).';
+function storeGuard(codes){ const c=codes.filter(Boolean); if(!c.length) return; const bad=c.filter(x=>x!==D.code); if(bad.length) throw new Error('File ini milik store '+bad[0]+', bukan store '+D.code+'. '+OWNER_MSG); }
 function parseNav(XLSX, buf){
   const rows = readRows(XLSX, buf); let hi=-1;
   for(let i=0;i<Math.min(rows.length,30);i++){ const n=rows[i].map(norm); if((n.includes('np no.')||n.includes('np no'))&&n.includes('type')){ hi=i; break; } }
@@ -258,12 +260,14 @@ function parseNav(XLSX, buf){
     seen[np]={np, type:String(r[ct]==null?'':r[ct]).replace(/\s+/g,' ').trim(), date:cd>=0?isoDate(r[cd]):''}; }
   Object.keys(seen).forEach(k=>out.push(seen[k]));
   if(!out.length) throw new Error('tidak ada baris nota pada file NAV');
+  storeGuard(out.map(x=>{ const m=/^MS(\d{5})\d/.exec(x.np); return m?m[1]:''; }));
   return {nav:out};
 }
 function parseMoves(XLSX, buf){
   const rows = readRows(XLSX, buf); let hi=-1;
   for(let i=0;i<Math.min(rows.length,30);i++){ const n=rows[i].map(norm); if(n.includes('item no')&&n.includes('moved qty')){ hi=i; break; } }
   if(hi<0) throw new Error('bukan report Stock Movement (butuh kolom "Item No" dan "Moved Qty")');
+  storeGuard(rows.slice(0,hi+1).map(r=>{ const m=/Location:\s*(\d{4,6})\b/i.exec(r.join(' ')); return m?m[1]:''; }));
   const h=rows[hi].map(norm), ci=n=>h.indexOf(n), cdt=ci('date'), cit=ci('item no'), cds=ci('item description'), cu=ci('base uom'), cq=ci('moved qty');
   const moves={}; let used=0;
   for(let i=hi+1;i<rows.length;i++){ const r=rows[i], d=isoDate(r[cdt]), it=itemNo10(r[cit]); if(!d||!it) continue;
@@ -1589,6 +1593,7 @@ async function handleZona(f, buf){
 }
 let busy=false;
 async function handleFiles(list){
+  if(!LIC_OK){ alert('Unggah diblokir. '+OWNER_MSG); return; }
   const files=[...list]; if(!files.length||busy) return;
   if(!canWrite){ setStatus('Peran Anda hanya bisa melihat data.','warn'); return; }
   if(!window.XLSX){ setStatus('Pembaca Excel gagal dimuat. Periksa koneksi, lalu muat ulang halaman.','err'); return; }
@@ -1673,6 +1678,11 @@ const TIM = new URLSearchParams(location.search).get('t');  // link tim sales: h
 if(TIM) document.body.classList.add('tim');
 mvReady=true;
 const bootEl=$('boot'), appEl=$('app');
+let LIC_OK=true;
+async function licCheck(){
+  try{ const { data, error } = await SB.rpc('license_status',{p_store:D.code}); if(!error&&data&&data.ok===false){ LIC_OK=false; canWrite=false; bootMsg('Akses diblokir. Store '+D.code+' belum mendapat izin dari pemilik dashboard. '+OWNER_MSG,true); return false; } }catch(e){}
+  return true;
+}
 const bootMsg=(t,showOut)=>{ $('boot-msg').textContent=t; $('boot-out').hidden=!showOut; bootEl.hidden=false; appEl.hidden=true; $('psdock').hidden=true; };
 const toLogin=()=>{ try{sessionStorage.setItem('mitra10_next','dashboard.html')}catch(e){} location.replace('login.html?next=dashboard.html'); };
 async function loadAll(){
@@ -1698,6 +1708,7 @@ const ROLE_LABEL={admin:'Admin',editor:'Editor',viewer:'Viewer'};
 async function boot(){
   rebuild(true);
   if(!SB){ bootMsg('Konfigurasi belum lengkap. Isi SUPABASE_URL dan SUPABASE_PUBLISHABLE_KEY di config.js.',false); return; }
+  if(!(await licCheck())) return;
   if(TIM){
     canWrite=false; await loadAll();
     if(dbReady){ bootEl.hidden=true; appEl.hidden=false; $('psdock').hidden=false; applyWrite(); }
