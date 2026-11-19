@@ -70,9 +70,9 @@ table.mg th:nth-child(2){text-align:right}
 .ckbtn:hover{border-color:var(--bar)}
 .ckdot{width:9px;height:9px;border-radius:50%;background:var(--good)}
 .ckbtn.warn .ckdot{background:var(--amber)}.ckbtn.bad .ckdot{background:var(--bad)}
-#ckPanel{position:absolute;right:0;top:calc(100% + 8px);width:min(540px,92vw);max-height:70vh;overflow:auto;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;box-shadow:0 12px 36px rgba(15,30,60,.22);padding:14px;z-index:40;text-align:left}
-#ckPanel h3{margin:0;font-size:15px}#ckPanel .hint{margin:2px 0 10px}
-#ckList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#ckPanel,#abPanel{position:absolute;right:0;top:calc(100% + 8px);width:min(540px,92vw);max-height:70vh;overflow:auto;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;box-shadow:0 12px 36px rgba(15,30,60,.22);padding:14px;z-index:40;text-align:left}
+#ckPanel h3,#abPanel h3{margin:0;font-size:15px}#ckPanel .hint,#abPanel .hint{margin:2px 0 10px}
+#ckList,#abList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .ckrow{border:1px solid var(--line);border-radius:10px;background:var(--bg)}
 .ckhead{all:unset;box-sizing:border-box;width:100%;display:flex;gap:10px;align-items:center;padding:9px 10px;cursor:pointer}
 .ckhead:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:10px}
@@ -316,6 +316,15 @@ body.tim header .who,body.tim #databar,body.tim .kpis,body.tim .grid2,body.tim #
             <p class="hint" id="ckSub"></p>
             <ul id="ckList"></ul>
             <div class="ckfoot"><button type="button" class="btn primary sm" id="ckAll">Unduh semua template (2 file)</button><span class="hint2">Klik baris untuk melihat tanggal yang kurang.</span></div>
+          </div>
+        </div>
+        <div class="ckw">
+          <button type="button" class="ckbtn" id="abBtn" aria-expanded="false" aria-controls="abPanel">Checklist absensi</button>
+          <div id="abPanel" hidden role="dialog" aria-label="Checklist absensi jadwal per zona">
+            <h3>Checklist absensi (jadwal per zona)</h3>
+            <p class="hint" id="abSub"></p>
+            <ul id="abList"></ul>
+            <div class="ckfoot"><span class="hint2">Jadwal diunggah TL zonasi dengan format ABSENSI ZONA. Klik baris untuk unggah atau unduh format terisi.</span></div>
           </div>
         </div>
       </div>

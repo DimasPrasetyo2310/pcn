@@ -1319,16 +1319,26 @@ function ckItems(){
   const ms=hasS? exp.filter(d=>!sd.has(d)) : exp;
   mk('sched','Target dan daftar salesperson (admin, bulanan)','File: jadwal & target (kolom SALES ID, TARGET/DAY, lalu kolom tanggal)',ms,null,hasS? SCH.people.length+' orang, sampai '+ckLab(SCH.dates[SCH.dates.length-1]) : '',hasS? ms.length+' tanggal belum ada di jadwal' : 'Belum ada file jadwal',
     [hasS? (ms.length?'Belum ada di jadwal: '+ckDates(ms):'Semua tanggal 1 sampai '+ckLab(P.ref)+' ada di jadwal.') : 'Belum ada jadwal & target.','Isi: kode jadwal harian (S/P/M/OFF dst), zonasi, master brand, category, TARGET/DAY dan TARGET/MONTH.'],['sched']);
-  // Jadwal harian dipisah per zona: diunggah masing-masing TL zonasi
+  return out;
+}
+function abItems(){
+  const P=ckPeriod(), z=n=>String(n).padStart(2,'0'), out=[];
+  const mk=(id,title,file,bad,okTxt,badTxt,lines,tpl)=>out.push({id,title,file,state:bad.length?'bad':'ok',summary:bad.length?badTxt:okTxt,lines:lines.filter(Boolean),tpl});
+  const exp=[]; for(let i=1;i<=P.day;i++) exp.push(P.y+'-'+z(P.m)+'-'+z(i));
+  const sd=new Set((SCH&&SCH.dates)||[]), covered=exp.length&&exp.every(d=>sd.has(d)), lastI=covered?SCH.dates.indexOf(exp[exp.length-1]):-1;
   const zk=new Set(); ((SCH&&SCH.people)||[]).forEach(e=>{ if(e.zona) zk.add(normZona(e.zona)); }); Object.keys((SCH&&SCH.zones)||{}).forEach(k=>zk.add(k));
   const zs=[...zk].sort((a,b)=>(parseInt(a.replace(/\D/g,''))||0)-(parseInt(b.replace(/\D/g,''))||0)||a.localeCompare(b)), ymk=P.y+'-'+z(P.m);
   zs.forEach(zn=>{
-    const zi=(SCH&&SCH.zones&&SCH.zones[zn])||null, okM=!!(zi&&zi.month===ymk), nz=((SCH&&SCH.people)||[]).filter(e=>normZona(e.zona||'')===zn).length;
+    const zi=(SCH&&SCH.zones&&SCH.zones[zn])||null, up=!!(zi&&zi.month===ymk), ppl=((SCH&&SCH.people)||[]).filter(e=>normZona(e.zona||'')===zn);
+    // Zona yang jadwalnya sudah ada di file jadwal & target untuk periode ini dianggap sudah input
+    const filled=lastI>=0&&ppl.length&&ppl.filter(e=>String((e.c||[])[lastI]||'').trim()!=='').length>=Math.ceil(ppl.length/2);
+    const okM=up||filled;
     const when=zi&&zi.uploadedAt? new Date(zi.uploadedAt).toLocaleString('id-ID',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : '';
     const ml=zi&&zi.month? CKMON[+zi.month.slice(5,7)-1]+' '+zi.month.slice(0,4) : '';
-    mk('z:'+zn,'Jadwal '+zn+' (TL zonasi)','File: ABSENSI '+zn+' (kolom SALESPERSON ID, NAMA, BRAND, ZONA, lalu tanggal 1 sampai akhir bulan)',okM?[]:[1],null,
-      okM? 'Diunggah '+when+' · '+zi.n+' orang' : '', zi&&zi.month? 'Terakhir untuk '+ml+', belum ada untuk '+CKMON[P.m-1]+' '+P.y : 'Belum diunggah untuk '+CKMON[P.m-1]+' '+P.y,
-      [okM? 'Sumber: '+(zi.source||'-')+' ('+zi.n+' orang). '+nz+' orang tercatat di '+zn+'.' : 'TL '+zn+' belum mengunggah jadwal '+CKMON[P.m-1]+' '+P.y+'.',
+    mk('z:'+zn,'Absensi '+zn+' (TL zonasi)','File: ABSENSI '+zn+' (kolom SALESPERSON ID, NAMA, BRAND, ZONA, lalu tanggal 1 sampai akhir bulan)',okM?[]:[1],
+      up? 'Diunggah TL '+when+' · '+zi.n+' orang' : 'Sudah ada di jadwal (dianggap sudah input)',
+      zi&&zi.month? 'Terakhir untuk '+ml+', belum ada untuk '+CKMON[P.m-1]+' '+P.y : 'Belum ada jadwal '+CKMON[P.m-1]+' '+P.y,
+      [up? 'Sumber: '+(zi.source||'-')+' ('+zi.n+' orang). '+ppl.length+' orang tercatat di '+zn+'.' : (okM? ppl.length+' orang di '+zn+' sudah punya jadwal sampai '+ckLab(P.ref)+'. TL boleh memperbarui dengan format ABSENSI.' : 'Jadwal '+zn+' untuk '+CKMON[P.m-1]+' '+P.y+' belum ada. TL zonasi mengunggah file ABSENSI '+zn+'.'),
        'Format baku: baris 1 = SALESPERSON ID, NAMA, BRAND, ZONA, 1, 2, 3 … sampai akhir bulan. Nama sheet berisi bulan dan tahun (contoh NOVEMBER 2026). Kode: '+ZKODE.join(', ')+'. File yang tidak sesuai ditolak beserta alasannya.'],['zona:'+zn]);
   });
   return out;
@@ -1354,25 +1364,33 @@ async function dlTpl(kinds){
   const nm={sales:'sales-detail',sched:'jadwal'}, k0=kinds[0], zf=k0.startsWith('zona:')? 'jadwal-'+k0.slice(5).toLowerCase().replace(/\s+/g,'-') : null;
   try{ await saveBlob(blob,(zf? zf : 'template-'+(kinds.length>1?'semua':nm[k0]))+'-'+P.y+'-'+String(P.m).padStart(2,'0')+'.xlsx'); }catch(e){ setStatus('Template gagal diunduh.','warn'); }
 }
-function renderChecklist(){
-  if(!$('ckBtn')) return;
-  const it=ckItems(), nOk=it.filter(x=>x.state==='ok').length, P=ckPeriod();
+function renderCk(pf,it,label,sub){
+  if(!$(pf+'Btn')) return;
+  const nOk=it.filter(x=>x.state==='ok').length;
   const worst=it.some(x=>x.state==='bad')?'bad':it.some(x=>x.state==='warn')?'warn':'ok';
-  $('ckBtn').className='ckbtn '+worst; $('ckBtn').innerHTML='<span class="ckdot"></span>Checklist database <b>'+nOk+'/'+it.length+'</b>';
+  $(pf+'Btn').className='ckbtn '+worst; $(pf+'Btn').innerHTML='<span class="ckdot"></span>'+label+' <b>'+nOk+'/'+it.length+'</b>';
   const ic={ok:'✓',warn:'!',bad:'✕'}, esc2=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
-  $('ckList').innerHTML=it.map((x,i)=>'<li class="ckrow '+x.state+(CKOPEN[x.id]?' open':'')+'"><button type="button" class="ckhead" data-ck="'+x.id+'" aria-expanded="'+!!CKOPEN[x.id]+'"><span class="ckic">'+ic[x.state]+'</span><span class="cktx"><b>'+(i+1)+'. '+x.title+'</b><small>'+esc2(x.summary)+'</small></span><span class="ckch">▾</span></button>'
+  $(pf+'List').innerHTML=it.map((x,i)=>'<li class="ckrow '+x.state+(CKOPEN[x.id]?' open':'')+'"><button type="button" class="ckhead" data-ck="'+x.id+'" aria-expanded="'+!!CKOPEN[x.id]+'"><span class="ckic">'+ic[x.state]+'</span><span class="cktx"><b>'+(i+1)+'. '+x.title+'</b><small>'+esc2(x.summary)+'</small></span><span class="ckch">▾</span></button>'
     +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="'+(x.id.startsWith('z:')?x.id.slice(2):'1')+'">'+(x.id.startsWith('z:')?'Unggah jadwal zona':'Unggah file')+'</button>':'')+'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh '+(x.id.startsWith('z:')?'format zona (terisi)':'template')+'</button></div></div></li>').join('');
-  $('ckSub').textContent='Periode '+CKMON[P.m-1]+' '+P.y+', sampai '+ckLab(P.ref)+' (mengikuti tanggal "Sampai")';
+  $(pf+'Sub').textContent=sub;
+}
+function renderChecklist(){
+  const P=ckPeriod(), sub='Periode '+CKMON[P.m-1]+' '+P.y+', sampai '+ckLab(P.ref)+' (mengikuti tanggal "Sampai")';
+  renderCk('ck',ckItems(),'Checklist database',sub);
+  renderCk('ab',abItems(),'Checklist absensi',sub+'. Zona yang jadwalnya sudah ada dianggap sudah input.');
 }
 document.addEventListener('click',e=>{
-  const b=e.target.closest('#ckBtn'); if(b){ const o=$('ckPanel').hidden; $('ckPanel').hidden=!o; b.setAttribute('aria-expanded',String(o)); return; }
+  for(const pf of ['ck','ab']){
+    const b=e.target.closest('#'+pf+'Btn');
+    if(b){ const o=$(pf+'Panel').hidden; ['ck','ab'].forEach(q=>{ if($(q+'Panel')){ $(q+'Panel').hidden=true; $(q+'Btn').setAttribute('aria-expanded','false'); } }); $(pf+'Panel').hidden=!o; b.setAttribute('aria-expanded',String(o)); return; }
+  }
   const h=e.target.closest('.ckhead'); if(h){ CKOPEN[h.dataset.ck]=!CKOPEN[h.dataset.ck]; renderChecklist(); return; }
   const u=e.target.closest('[data-up]'); if(u){ ZEXP=u.dataset.up==='1'?null:u.dataset.up; $('file').click(); return; }
-  const t=e.target.closest('[data-tpl]'); if(t){ const it=ckItems().find(x=>x.id===t.dataset.tpl); if(it) dlTpl(it.tpl); return; }
+  const t=e.target.closest('[data-tpl]'); if(t){ const it=ckItems().concat(abItems()).find(x=>x.id===t.dataset.tpl); if(it) dlTpl(it.tpl); return; }
   if(e.target.closest('#ckAll')){ dlTpl(['sales','sched']); return; }
-  if(!e.target.closest('#ckPanel') && $('ckPanel') && !$('ckPanel').hidden){ $('ckPanel').hidden=true; $('ckBtn').setAttribute('aria-expanded','false'); }
+  ['ck','ab'].forEach(pf=>{ if(!e.target.closest('#'+pf+'Panel') && $(pf+'Panel') && !$(pf+'Panel').hidden){ $(pf+'Panel').hidden=true; $(pf+'Btn').setAttribute('aria-expanded','false'); } });
 });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&$('ckPanel')&&!$('ckPanel').hidden){ $('ckPanel').hidden=true; $('ckBtn').focus(); } });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') ['ck','ab'].forEach(pf=>{ if($(pf+'Panel')&&!$(pf+'Panel').hidden){ $(pf+'Panel').hidden=true; $(pf+'Btn').focus(); } }); });
 function renderDataBar(){
   const n=dates.length, f=o=>fd(o,{day:'numeric',month:'short',year:'numeric'});
   $('db-title').textContent = n? n+' hari data · '+f(dates[0])+(n>1?' sampai '+f(dates[n-1]):'') : 'Belum ada data';
