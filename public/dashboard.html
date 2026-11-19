@@ -256,6 +256,12 @@ table.mt .ok{color:var(--good);font-weight:600}
 .spvc{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:12px 0 10px;position:sticky;top:0;background:#fff;z-index:2}.spvc label{font-size:12px;color:var(--ink3);display:flex;gap:6px;align-items:center}.spvc select{font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff}
 .spvt{display:flex;flex-wrap:wrap;gap:6px}.spvt button{font:inherit;font-size:12.5px;padding:5px 11px;border:1px solid var(--line);border-radius:999px;background:#fff;cursor:pointer}.spvt button i{font-style:normal;font-weight:700;margin-left:3px}.spvt button.on{background:var(--navy);color:#fff;border-color:var(--navy)}
 table.spvtb td.spok{color:#0e6b49;font-weight:600;background:#eaf7f0;white-space:nowrap}table.spvtb td.spno{color:#b4271c;background:#fdeceb;font-weight:600}table.spvtb td small{display:block;font-weight:400;color:var(--ink3);font-size:10.5px}table.spvtb tr.tot td{background:var(--soft)}
+.mvsum{grid-template-columns:repeat(5,1fr)!important}@media(max-width:900px){.mvsum{grid-template-columns:1fr 1fr!important}}
+.spv .spsum>div[data-mvf]{cursor:pointer;transition:box-shadow .15s,transform .15s}.spv .spsum>div[data-mvf]:hover,.spv .spsum>div[data-mvf]:focus-visible{box-shadow:0 2px 10px rgba(0,0,0,.14);transform:translateY(-1px);outline:none}
+table.mvtb{width:100%;border-collapse:collapse;font-size:14px}table.mvtb th{position:sticky;top:0;text-align:left;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#fff;font-weight:700;padding:8px 10px;background:var(--navy);border-bottom:3px solid var(--amber)}table.mvtb th.rt,table.mvtb td.rt{text-align:right}table.mvtb td{padding:8px 10px;border-bottom:1px solid var(--grid)}table.mvtb td small{display:block;font-weight:400;font-size:11px;opacity:.85}
+table.mvtb tr[data-mvr]{cursor:pointer}table.mvtb tr[data-mvr]:hover td{filter:brightness(.97)}table.mvtb td.mvok{background:#eaf7f0;color:#0e6b49;font-weight:700}table.mvtb td.mvno{background:#fdeceb;color:#b4271c;font-weight:700}table.mvtb tr.tot td{background:#f4f6fb}
+table.spvtb td.mvwarn{background:#fff4d6;color:#6b4a00;font-weight:600}
+
 
 @media (max-width:640px){.pop-hd,.pinfo{padding-left:14px;padding-right:14px}.pop-body{padding:4px 14px 14px}}
 /* Link tim sales (?t=...): hanya tabel detail, hanya baca */
@@ -391,6 +397,12 @@ body.tim header .who,body.tim #databar,body.tim .kpis,body.tim .grid2,body.tim #
         <div class="ctl"><select id="sp-zona" aria-label="Filter zonasi"></select><details class="spms" id="sp-shiftbox"><summary id="sp-shifts" aria-label="Filter shift (boleh pilih lebih dari satu)">Semua shift</summary><div class="spml" id="sp-shiftl"></div></details><select id="sp-date" aria-label="Filter tanggal"></select><select id="sp-sel" aria-label="Pilih salesperson" hidden></select></div></div>
       <div id="sp-list" style="margin-bottom:14px"></div>
       <div id="sp-body" hidden></div>
+    </section>
+
+    <section class="card" id="mv-card" hidden>
+      <div class="hd"><div><h2>Task Order Movement harian</h2><p class="hint">Item yang terjual (Sales Detail) dicocokkan dengan Stock Movement. Hijau = sudah di-movement, merah = belum. Klik kartu atau nama sales untuk melihat detail item.</p></div>
+        <div class="ctl"><select id="mv-date" aria-label="Tanggal movement"></select></div></div>
+      <div id="mv-body"></div>
     </section>
 
   <section class="card" id="detail-card">

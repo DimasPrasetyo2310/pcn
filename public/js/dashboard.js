@@ -42,6 +42,19 @@ const readRows = (XLSX, buf) => {
   return XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
 };
 
+const tmOf = v => {
+  if(typeof v==='number' && v>=0 && v<1){ const t=Math.round(v*86400); return pad(Math.floor(t/3600)%24)+':'+pad(Math.floor(t%3600/60))+':'+pad(t%60); }
+  const m=/(\d{1,2}):(\d{2})(?::(\d{2}))?/.exec(String(v)); return m? pad(+m[1])+':'+m[2]+':'+(m[3]||'00') : '';
+};
+const itemNo10 = v => { const t=String(v==null?'':v).trim(); return /^\d+$/.test(t)? t.padStart(10,'0') : t; };
+let mvGet = null;
+function mvAdd(map, r){
+  const ino=itemNo10(mvGet(r,'item no')); if(!ino) return;
+  const np=String(mvGet(r,'np no')).trim(), q=num(mvGet(r,'qty')), tm=tmOf(mvGet(r,'time')), k=ino+'|'+np;
+  const e=map[k]||(map[k]=[ino,clean(mvGet(r,'item name')),np,0,tm]); e[3]+=q; if(tm&&(!e[4]||tm<e[4])) e[4]=tm;
+}
+const mvOut = map => Object.values(map).map(e=>[e[0],e[1],e[2],Math.round(e[3]*100)/100,e[4]]);
+
 function parseReport(XLSX, buf, storeCode){
   const rows = readRows(XLSX, buf);
   let hi = -1;
@@ -49,12 +62,13 @@ function parseReport(XLSX, buf, storeCode){
   if(hi<0) throw new Error('baris judul kolom tidak ditemukan (harus ada kolom "Receipt Date")');
   const col = {};
   rows[hi].forEach((c,i)=>{ const k=norm(c); if(k && !(k in col)) col[k]=i; });
-  const ALIAS = {'qty':['quantity'],'amount include sales':['amount inculde sales','amount incl sales'],'salescode id':['salesperson id'],'salescode name':['salesperson name'],'dicount amount':['discount amount','discount']};
+  const ALIAS = {'qty':['quantity'],'amount include sales':['amount inculde sales','amount incl sales'],'salescode id':['salesperson id'],'salescode name':['salesperson name'],'dicount amount':['discount amount','discount'],'np no':['nota penjualan no','np no.','nota penjualan no.']};
   for(const k in ALIAS){ if(!(k in col)){ const f=ALIAS[k].find(x=>x in col); if(f) col[k]=col[f]; } }
   const need = ['receipt date','receipt no','qty','amount exclude sales','salescode id','salescode name'];
   const miss = need.filter(k=>!(k in col));
   if(miss.length) throw new Error('kolom tidak ada: '+miss.join(', '));
   const get = (r,k) => (k in col) ? r[col[k]] : '';
+  mvGet = get;
   const days = {};
   let skippedRows = 0, skippedStore = 0, used = 0;
   for(let i=hi+1;i<rows.length;i++){
@@ -63,7 +77,7 @@ function parseReport(XLSX, buf, storeCode){
     if(!date){ if(r.some(c=>String(c).trim()!=='')) skippedRows++; continue; }
     const store = String(get(r,'store no')).trim();
     if(storeCode && store && store!==String(storeCode)){ skippedStore++; continue; }
-    const d = days[date] || (days[date]={tot:0,rec:new Set(),lines:0,unS:0,unL:0,unRec:new Set(),people:{},hours:{},prot:{},mb:{}});
+    const d = days[date] || (days[date]={tot:0,rec:new Set(),lines:0,unS:0,unL:0,unRec:new Set(),people:{},hours:{},prot:{},mb:{},mvx:{}});
     const amt = num(get(r,'amount exclude sales')), inc = num(get(r,'amount include sales')), rn = String(get(r,'receipt no')).trim();
     let sid = String(get(r,'salescode id')).trim(); if(/^(null|none|nan|n\/a|-)$/i.test(sid)) sid='';
     d.tot += amt; d.rec.add(rn); d.lines++; used++;
@@ -74,8 +88,8 @@ function parseReport(XLSX, buf, storeCode){
       if(!pr.name && sid){ const nm0=clean(get(r,'salescode name')); if(nm0 && !/^(null|none|nan)$/i.test(nm0)) pr.name=nm0; }
     }
     const hr = hourOf(get(r,'time')); if(hr!==null) d.hours[hr] = (d.hours[hr]||0)+amt;
-    if(!sid){ d.unS += amt; d.unL++; d.unRec.add(rn); continue; }
-    const p = d.people[sid] || (d.people[sid]={id:sid,name:'',sales:0,incl:0,qty:0,rec:new Set(),lines:0,disc:0,cats:{},brands:{},pb:0,pbc:{},it:{}});
+    if(!sid){ d.unS += amt; d.unL++; d.unRec.add(rn); mvAdd(d.mvx, r); continue; }
+    const p = d.people[sid] || (d.people[sid]={id:sid,name:'',sales:0,incl:0,qty:0,rec:new Set(),lines:0,disc:0,cats:{},brands:{},pb:0,pbc:{},it:{},mv:{}});
     if(!p.name){ const nm=clean(get(r,'salescode name')); if(nm && !/^(null|none|nan)$/i.test(nm)) p.name=nm; }
     p.sales += amt; p.incl += inc; p.qty += num(get(r,'qty'));
     p.rec.add(rn); p.lines++; p.disc += num(get(r,'dicount amount'));
@@ -84,6 +98,7 @@ function parseReport(XLSX, buf, storeCode){
     const mb = String(get(r,'master brand')).trim().toUpperCase() || 'LAINNYA';
     p.brands[mb] = (p.brands[mb]||0)+amt;
     { const ino=String(get(r,'item no')).trim(), idesc=clean(get(r,'item name')), ik=ino||idesc; const ie=p.it[ik]||(p.it[ik]=[cat,mb,ino,idesc,0,0]); ie[4]+=num(get(r,'qty')); ie[5]+=amt; if(/^private brand$/i.test(String(get(r,'master type brand')).trim())) ie[6]=1; }
+    mvAdd(p.mv, r);
     if(/^private brand$/i.test(String(get(r,'master type brand')).trim())){ p.pb += amt; p.pbc[cat]=(p.pbc[cat]||0)+amt; }
   }
   const out = {};
@@ -92,12 +107,13 @@ function parseReport(XLSX, buf, storeCode){
     out[date] = {
       basis:'excl2',
       meta:{total:Math.round(d.tot),receipts:d.rec.size,lines:d.lines,unSales:Math.round(d.unS),unLines:d.unL,unReceipts:d.unRec.size},
+      mvx:mvOut(d.mvx),
       people:Object.values(d.people).map(p=>{
         const nm = p.name || p.id;
         const cats = {}; for(const c in p.cats) cats[c]=Math.round(p.cats[c]);
         const pbc = {}; for(const c in p.pbc){ const v=Math.round(p.pbc[c]); if(v) pbc[c]=v; }
         const brands = {}; for(const b in p.brands){ const v=Math.round(p.brands[b]); if(v) brands[b]=v; }
-        return {id:p.id,name:nm,role:/KASIR/i.test(nm)?'Kasir':'Sales',sales:Math.round(p.sales),incl:Math.round(p.incl),qty:Math.round(p.qty),receipts:p.rec.size,lines:p.lines,disc:Math.round(p.disc),cats,brands,pb:Math.round(p.pb),pbc,it:Object.values(p.it).map(e=>{ const a=[e[0],e[1],e[2],e[3],Math.round(e[4]*100)/100,Math.round(e[5])]; if(e[6]) a.push(1); return a; })};
+        return {id:p.id,name:nm,role:/KASIR/i.test(nm)?'Kasir':'Sales',sales:Math.round(p.sales),incl:Math.round(p.incl),qty:Math.round(p.qty),receipts:p.rec.size,lines:p.lines,disc:Math.round(p.disc),cats,brands,pb:Math.round(p.pb),pbc,it:Object.values(p.it).map(e=>{ const a=[e[0],e[1],e[2],e[3],Math.round(e[4]*100)/100,Math.round(e[5])]; if(e[6]) a.push(1); return a; }),mv:mvOut(p.mv)};
       }),
       mb:Object.fromEntries(Object.entries(d.mb).map(([k,v])=>[k,{q:Math.round(v.q),s:Math.round(v.s)}])),
       prot:Object.values(d.prot).map(x=>({id:x.id,name:x.name||x.id,q:Math.round(x.q),s:Math.round(x.s)})),
@@ -232,7 +248,32 @@ function mergeZona(doc, z, source, now){
   const zones = Object.assign({}, base.zones||{}, {[z.zona]:{month:z.month, source, uploadedAt:now, n:z.people.length}});
   return Object.assign({}, base, {basis:'sched1', dates:nd, people, zones});
 }
-if(typeof module!=='undefined') module.exports = {parseReport, parseSchedule, parseZona, mergeZona, isZonaFile};
+function parseNav(XLSX, buf){
+  const rows = readRows(XLSX, buf); let hi=-1;
+  for(let i=0;i<Math.min(rows.length,30);i++){ const n=rows[i].map(norm); if((n.includes('np no.')||n.includes('np no'))&&n.includes('type')){ hi=i; break; } }
+  if(hi<0) throw new Error('bukan file Nota Penjualan NAV (butuh kolom "NP No." dan "Type")');
+  const h=rows[hi].map(norm), cn=h.findIndex(x=>x==='np no.'||x==='np no'), ct=h.indexOf('type'), cd=h.indexOf('order date');
+  const seen={}, out=[];
+  for(let i=hi+1;i<rows.length;i++){ const r=rows[i], np=String(r[cn]==null?'':r[cn]).trim(); if(!np) continue;
+    seen[np]={np, type:String(r[ct]==null?'':r[ct]).replace(/\s+/g,' ').trim(), date:cd>=0?isoDate(r[cd]):''}; }
+  Object.keys(seen).forEach(k=>out.push(seen[k]));
+  if(!out.length) throw new Error('tidak ada baris nota pada file NAV');
+  return {nav:out};
+}
+function parseMoves(XLSX, buf){
+  const rows = readRows(XLSX, buf); let hi=-1;
+  for(let i=0;i<Math.min(rows.length,30);i++){ const n=rows[i].map(norm); if(n.includes('item no')&&n.includes('moved qty')){ hi=i; break; } }
+  if(hi<0) throw new Error('bukan report Stock Movement (butuh kolom "Item No" dan "Moved Qty")');
+  const h=rows[hi].map(norm), ci=n=>h.indexOf(n), cdt=ci('date'), cit=ci('item no'), cds=ci('item description'), cu=ci('base uom'), cq=ci('moved qty');
+  const moves={}; let used=0;
+  for(let i=hi+1;i<rows.length;i++){ const r=rows[i], d=isoDate(r[cdt]), it=itemNo10(r[cit]); if(!d||!it) continue;
+    const q=num(r[cq]); const m=moves[d]||(moves[d]={}); const e=m[it]||(m[it]={q:0,uom:'',desc:'',n:0});
+    e.q+=q; e.n++; used++; if(!e.uom) e.uom=String(r[cu]==null?'':r[cu]).trim(); if(!e.desc) e.desc=clean(r[cds]==null?'':r[cds]); }
+  if(!used) throw new Error('tidak ada baris data pada report Stock Movement');
+  Object.keys(moves).forEach(d=>Object.keys(moves[d]).forEach(k=>{ moves[d][k].q=Math.round(moves[d][k].q*100)/100; }));
+  return {moves, used};
+}
+if(typeof module!=='undefined') module.exports = {parseReport, parseSchedule, parseZona, mergeZona, isZonaFile, parseNav, parseMoves};
 
 let P = [], M = {}, H = [], days = {}, dates = [];
 const fmtN = new Intl.NumberFormat('id-ID');
@@ -975,7 +1016,74 @@ function renderSP(noFetch){
 }
 document.addEventListener('click',ev=>{ const t=ev.target; if(t&&t.closest&&t.closest('[data-spshreset]')){ spShift=[]; renderSP(true); return; } const bx=$('sp-shiftbox'); if(bx&&bx.open&&!(t.closest&&t.closest('#sp-shiftbox'))) bx.open=false; });
 document.addEventListener('change',ev=>{ const id=ev.target&&ev.target.id; if(id==='sp-sel'){ spSel=ev.target.value; renderSP(); } else if(id==='sp-zona'){ spZ=ev.target.value; renderSP(); } else if(ev.target.classList&&ev.target.classList.contains('spshc')){ spShift=[...document.querySelectorAll('#sp-shiftl .spshc:checked')].map(x=>x.value); renderSP(true); } else if(id==='sp-date'){ spDate=ev.target.value; renderSP(true); } });
-function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); renderTable(); renderLow(); renderFoot(); }
+
+/* ---- Task Order Movement harian ---- */
+let MV={d:'',data:null,key:'',ver:0,busy:false,err:''}, MVP=null, mvReady=false;
+const mvName=(d,id)=>{ if(!id) return '(Tanpa salesperson)'; const q=days[d]&&(days[d].people||[]).find(x=>x.id===id); return (q&&q.name)||(SCHM[id]&&SCHM[id].name)||id; };
+const mvShort=id=>id?String(id).replace(/^S10005-0*/,''):'–';
+const mvQ=v=>fmtN.format(Math.round(v*100)/100);
+function mvStat(L){ const s={n:0,q:0,tn:0,tq:0,dn:0,dq:0,an:0,unk:0}; L.forEach(l=>{ s.n++; s.q+=l[5]; if(l[7]){ s.tn++; s.tq+=l[5]; if((l[9]||0)>=l[5]) s.dn++; s.dq+=Math.min(l[5],l[9]||0); } else { s.an++; if(!l[8]) s.unk++; } }); return s; }
+async function mvLoad(key){
+  MV.key=key; MV.busy=true; MV.err=''; const d=MV.d;
+  const { data, error } = await SB.rpc('mv_report',{p_store:D.code,p_date:d});
+  MV.busy=false; if(MV.d!==d){ MV.key=''; mvRender(); return; }
+  if(error||!data||!data.ok){ MV.data=null; MV.err='Data movement belum bisa dimuat'+(error?' ('+(error.message||error.code)+')':'')+'.'; MV.key=''; } else MV.data=data;
+  mvDraw(); if(MVP&&!$('kpop').hidden) mvPopDraw();
+}
+function mvRender(){
+  const card=$('mv-card'); if(!card||!mvReady) return;
+  if(!SB||TIM||!dates.length){ card.hidden=true; return; }
+  card.hidden=false;
+  if(!MV.d||!dates.includes(MV.d)) MV.d=dates[dates.length-1];
+  $('mv-date').innerHTML=dates.slice().reverse().map(x=>'<option value="'+x+'"'+(x===MV.d?' selected':'')+'>'+esc(fd(x,{weekday:'short',day:'numeric',month:'short'}))+'</option>').join('');
+  const key=MV.d+'|'+MV.ver+'|'+((days[MV.d]&&days[MV.d].uploadedAt)||'');
+  if(MV.key!==key&&!MV.busy){ MV.data=null; mvDraw(); mvLoad(key); } else mvDraw();
+}
+function mvDraw(){
+  const b=$('mv-body'); if(!b) return;
+  if(!MV.data){ b.innerHTML='<p class="note">'+esc(MV.err||'Memuat data movement…')+'</p>'; return; }
+  const R=MV.data, L=R.lines||[], S=mvStat(L), d=MV.d;
+  const warn=[];
+  if(!R.has_mv) warn.push('<b>Sales Detail tanggal ini belum memuat No Nota per item.</b> Upload ulang file Sales Detail tanggal ini supaya task order bisa dihitung.');
+  if(!R.nav_n) warn.push('<b>File Nota Penjualan NAV belum pernah diupload.</b> Semua nota bernomor tidak bisa ditentukan Type-nya.');
+  if(R.has_mv&&!R.moves_n) warn.push('<b>Report Stock Movement tanggal ini belum diupload.</b> Semua task order tampil belum movement.');
+  if(S.unk) warn.push(S.unk+' item memakai No Nota yang tidak ada di file NAV (tidak dihitung sebagai task order). Upload file NAV terbaru.');
+  const tile=(lbl,val,sub,cls,f)=>'<div class="'+(cls||'')+'" data-mvf="'+f+'" role="button" tabindex="0" title="Klik untuk melihat detail"><small>'+lbl+'</small><b>'+val+'</b><span>'+sub+'</span></div>';
+  const belum=S.tn-S.dn;
+  const tiles=tile('Item terjual',S.n,mvQ(S.q)+' qty','','all')+
+    tile('Task order movement',S.tn,mvQ(S.tq)+' qty wajib movement','','task')+
+    tile('Sudah movement',S.dn+' / '+S.tn,S.tn?Math.round(S.dn/S.tn*1000)/10+'% selesai':'tidak ada task',S.tn&&!belum?'apok':(S.tn?'':'apok'),'done')+
+    tile('Belum movement',belum,mvQ(S.tq-S.dq)+' qty belum dipindah',belum?'apno':'apok','belum')+
+    tile('Auto checklist',S.an,'type lain, tidak perlu movement','','auto');
+  const g={}; L.forEach(l=>{ (g[l[0]]||(g[l[0]]=[])).push(l); });
+  const rows=Object.keys(g).map(id=>{ const st=mvStat(g[id]); return {id,name:mvName(d,id),st,ok:st.dn===st.tn}; })
+    .sort((a,b)=>(a.ok-b.ok)||String(a.name).localeCompare(String(b.name),'id'));
+  const tb=rows.length?'<div class="spw" style="max-height:560px;overflow:auto"><table class="mvtb"><thead><tr><th>Sales ID</th><th>Nama sales</th><th class="rt">Item terjual</th><th>Movement</th></tr></thead><tbody>'+rows.map(r=>'<tr data-mvr="'+esc(r.id)+'" tabindex="0" title="Klik untuk melihat detail item"><td class="num">'+esc(mvShort(r.id))+'</td><td><b>'+esc(r.name)+'</b></td><td class="num rt">'+r.st.n+' <small>'+mvQ(r.st.q)+' qty</small></td><td class="'+(r.ok?'mvok':'mvno')+'">'+(r.st.tn===0?'✓ Done <small>tidak ada task (auto)</small>':r.ok?'✓ Done <small>'+r.st.dn+'/'+r.st.tn+' task</small>':'✕ Belum <small>'+r.st.dn+'/'+r.st.tn+' task · sisa '+mvQ(r.st.tq-r.st.dq)+' qty</small>')+'</td></tr>').join('')+'<tr class="tot"><td colspan="2"><b>TOTAL ('+rows.length+' orang)</b></td><td class="num rt"><b>'+S.n+'</b> <small>'+mvQ(S.q)+' qty</small></td><td><b>'+S.dn+'/'+S.tn+' task</b></td></tr></tbody></table></div>':'<p class="note">Tidak ada item terjual pada tanggal ini.</p>';
+  b.innerHTML='<div class="spv">'+(warn.length?'<div class="spwarn">'+warn.map(w=>'<div>⚠ '+w+'</div>').join('')+'</div>':'')+'<div class="spsum mvsum">'+tiles+'</div></div>'+tb+'<p class="note">Wajib movement: Cash&amp;Carry via Pickup &amp; Delivery, Cash&amp;Carry via Gudang Store, dan Bawa Langsung (kolom NP No kosong). Type lain otomatis ✓. Qty movement dibagi ke salesperson berdasarkan urutan jam penjualan; item yang sama dijumlahkan per tanggal. Klik kartu atau nama untuk melihat detail item.'+(R.moves_n?' Stock Movement terakhir diupload '+esc(new Date(R.moves_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' WIB.':'')+'</p>';
+}
+function mvPop(who,f){ MVP={who,f}; mvPopDraw(true); }
+function mvPopDraw(open){
+  if(!MV.data||!MVP) return; const d=MV.d, all=(MV.data.lines||[]).filter(l=>MVP.who===null||l[0]===MVP.who), S=mvStat(all);
+  const flt={all:()=>true,task:l=>l[7],belum:l=>l[7]&&(l[9]||0)<l[5],done:l=>l[7]&&(l[9]||0)>=l[5],auto:l=>!l[7]}, f=flt[MVP.f]?MVP.f:'all';
+  const cnt=k=>all.filter(flt[k]).length, sh=all.filter(flt[f]);
+  sh.sort((a,b)=>(((b[7]&&(b[9]||0)<b[5])?1:0)-((a[7]&&(a[9]||0)<a[5])?1:0))||String(a[1]).localeCompare(String(b[1])));
+  const ttl=MVP.who===null?'Task Order Movement · semua salesperson':mvName(d,MVP.who);
+  if(open) kShow(ttl,[],'',null);
+  $('kpop-t').textContent=ttl; $('kpop-per').textContent=fd(d,{weekday:'long',day:'numeric',month:'long',year:'numeric'})+' · item terjual vs Stock Movement';
+  const info=[['Item terjual',S.n],['Task order',S.tn],['Sudah movement',S.dn+' / '+S.tn],['Belum movement',S.tn-S.dn],['Auto checklist',S.an]];
+  $('kpop-info').innerHTML=info.map(i=>'<div><span>'+esc(i[0])+'</span><b>'+esc(String(i[1]))+'</b></div>').join('');
+  const tabs=[['all','Semua'],['task','Task order'],['belum','Belum'],['done','Sudah'],['auto','Auto']];
+  const ctl='<div class="spvc"><div class="spvt">'+tabs.map(t=>'<button type="button" data-mvt="'+t[0]+'"'+(f===t[0]?' class="on"':'')+'>'+t[1]+' <i>'+cnt(t[0])+'</i></button>').join('')+'</div></div>';
+  const stc=l=>{ const q=l[5], a=l[9]||0; if(!l[7]) return l[8]?'<td class="spok">✓ Auto<small>'+esc(l[5]>0?l[6]:'')+'</small></td>':'<td class="mvwarn">? Type belum diketahui<small>NP tidak ada di NAV</small></td>'; return a>=q?'<td class="spok">✓ Done<small>'+mvQ(a)+' / '+mvQ(q)+'</small></td>':'<td class="spno">✕ '+(a>0?'Sebagian':'Belum')+'<small>'+mvQ(a)+' / '+mvQ(q)+'</small></td>'; };
+  const body=sh.length?'<table class="pt spvtb"><thead><tr>'+(MVP.who===null?'<th>Salesperson</th>':'')+'<th>Item No</th><th>Description</th><th>No Nota</th><th>Type</th><th class="rt">Qty jual</th><th>Status movement</th></tr></thead><tbody>'+sh.map(l=>'<tr>'+(MVP.who===null?'<td>'+esc(mvName(d,l[0]))+'</td>':'')+'<td class="num">'+esc(l[1])+'</td><td>'+esc(l[2])+'</td><td class="num">'+esc(l[3]||'–')+'</td><td>'+esc(l[6])+'</td><td class="num rt">'+mvQ(l[5])+'</td>'+stc(l)+'</tr>').join('')+'</tbody></table>':'<p class="note" style="padding:14px 4px">Tidak ada item pada filter ini.</p>';
+  $('kpop-body').innerHTML=ctl+body; if(open) $('kpop-body').scrollTop=0;
+}
+document.addEventListener('click',ev=>{ const t=ev.target.closest&&ev.target.closest('#mv-body [data-mvf], #mv-body tr[data-mvr], #kpop-body [data-mvt]'); if(!t) return;
+  if(t.dataset.mvt){ if(MVP){ MVP.f=t.dataset.mvt; mvPopDraw(); } return; }
+  if(!MV.data) return; if(t.dataset.mvf) mvPop(null,t.dataset.mvf); else mvPop(t.dataset.mvr,'all'); });
+document.addEventListener('keydown',ev=>{ if(ev.key!=='Enter') return; const t=ev.target.closest&&ev.target.closest('#mv-body [data-mvf], #mv-body tr[data-mvr]'); if(!t||!MV.data) return; if(t.dataset.mvf) mvPop(null,t.dataset.mvf); else mvPop(t.dataset.mvr,'all'); });
+document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='mv-date'){ MV.d=ev.target.value; mvRender(); } });
+function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));
 $('topn').addEventListener('change',e=>{ S.topn=parseInt(e.target.value,10); renderRank(); });
@@ -1394,7 +1502,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') ['ck','ab'].forEac
 function renderDataBar(){
   const n=dates.length, f=o=>fd(o,{day:'numeric',month:'short',year:'numeric'});
   $('db-title').textContent = n? n+' hari data · '+f(dates[0])+(n>1?' sampai '+f(dates[n-1]):'') : 'Belum ada data';
-  $('db-sub').textContent = 'Unggah laporan Sales Detail atau file jadwal & target (.xlsx, .xls, .csv), bisa lebih dari satu file. Jadwal per zona (format ABSENSI ZONA) diunggah TL zonasi lewat Checklist database. Tanggal penjualan yang sudah ada akan diganti.'+(dbReady?' Data tersimpan di Supabase dan langsung tampil di semua perangkat tim.':' Data belum tersambung ke penyimpanan.');
+  $('db-sub').textContent = 'Unggah laporan Sales Detail, jadwal & target, Nota Penjualan NAV, atau Report Stock Movement (.xlsx, .xls, .csv), bisa lebih dari satu file. Jadwal per zona (format ABSENSI ZONA) diunggah TL zonasi lewat Checklist database. Tanggal penjualan yang sudah ada akan diganti.'+(dbReady?' Data tersimpan di Supabase dan langsung tampil di semua perangkat tim.':' Data belum tersambung ke penyimpanan.');
   if(canWrite===false) $('db-sub').textContent='Peran Anda viewer, jadi hanya bisa melihat data. Untuk memperbarui data, minta admin mengubah peran Anda menjadi editor.';
   const s=SCH;
   $('sch-info').textContent = s.people.length? 'Jadwal & target: '+s.people.length+' orang · '+f(s.dates[0])+(s.dates.length>1?' sampai '+f(s.dates[s.dates.length-1]):'')+(s.source?' · '+s.source:'') : 'Belum ada jadwal & target. Unggah file jadwal untuk menampilkan kolom target.';
@@ -1405,6 +1513,22 @@ function renderDataBar(){
 }
 const errText = e => !e? '' : e.code==='quota_exceeded' ? 'Penyimpanan penuh.' : (e.code==='revoked'||e.code==='not_granted') ? 'Akses penyimpanan tidak tersedia.' : 'Penyimpanan gagal ('+(e.code||'error')+').';
 const dbErr = e => !e? '' : (e.code==='42501'||/row-level security|permission/i.test(e.message||'')) ? 'Akun Anda tidak punya izin mengubah data.' : 'Penyimpanan gagal ('+(e.message||e.code||'error')+').';
+async function persistMv(nav, moves){
+  if(!SB) return 'Penyimpanan belum tersedia.';
+  let fail=0, last=null; const now=new Date().toISOString();
+  if(nav&&nav.length){
+    for(let i=0;i<nav.length;i+=400){
+      const chunk=nav.slice(i,i+400).map(x=>({store_code:D.code,np_no:x.np,type:x.type,order_date:x.date||null,uploaded_at:now}));
+      const { error } = await SB.from('mv_nav').upsert(chunk,{onConflict:'store_code,np_no'}); if(error){ fail++; last=error; break; }
+    }
+  }
+  for(const d of Object.keys(moves||{})){
+    const del=await SB.from('mv_moves').delete().eq('store_code',D.code).eq('move_date',d); if(del.error){ fail++; last=del.error; continue; }
+    const rows=Object.entries(moves[d]).map(([k,v])=>({store_code:D.code,move_date:d,item_no:k,item_name:v.desc||'',uom:v.uom||'',qty:v.q,n:v.n,uploaded_at:now}));
+    const { error } = await SB.from('mv_moves').insert(rows); if(error){ fail++; last=error; }
+  }
+  return fail? dbErr(last)+' Data NAV / Stock Movement belum tersimpan.' : '';
+}
 async function persist(ds, sched){
   if(!SB) return 'Penyimpanan belum tersedia.';
   let fail=0, last=null;
@@ -1454,7 +1578,7 @@ async function handleFiles(list){
   if(!canWrite){ setStatus('Peran Anda hanya bisa melihat data.','warn'); return; }
   if(!window.XLSX){ setStatus('Pembaca Excel gagal dimuat. Periksa koneksi, lalu muat ulang halaman.','err'); return; }
   busy=true; $('upload').disabled=true;
-  const found={}, notes=[], zres=[]; let used=0, newSched=null;
+  const found={}, notes=[], zres=[]; let used=0, newSched=null, newNav=null, newMoves=null, movRows=0;
   for(const f of files){
     try{
       setStatus('Membaca '+f.name+'…');
@@ -1464,8 +1588,10 @@ async function handleFiles(list){
       try{ r=parseReport(window.XLSX, buf, D.code); }
       catch(e){
         if(!/Receipt Date/.test(e&&e.message||'')) throw e;
-        try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); const cz=effectiveSched(); if(cz&&cz.zones) sc.zones=cz.zones; newSched=sc; continue; }
-        catch(e2){ throw new Error('format tidak dikenali (bukan laporan Sales Detail dan bukan file jadwal & target)'); }
+        try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); const cz=effectiveSched(); if(cz&&cz.zones) sc.zones=cz.zones; newSched=sc; continue; }catch(e2){}
+        try{ const nv=parseNav(window.XLSX, buf); newNav=(newNav||[]).concat(nv.nav); continue; }catch(e3){}
+        try{ const mm=parseMoves(window.XLSX, buf); newMoves=newMoves||{}; for(const d in mm.moves){ const t=newMoves[d]||(newMoves[d]={}); for(const k in mm.moves[d]){ const v=mm.moves[d][k]; if(t[k]){ t[k].q+=v.q; t[k].n+=v.n; } else t[k]=v; } } movRows+=mm.used; continue; }catch(e4){}
+        throw new Error('format tidak dikenali (bukan Sales Detail, jadwal & target, Nota Penjualan NAV, atau Stock Movement)');
       }
       for(const d in r.days) found[d]=Object.assign(r.days[d],{source:f.name,uploadedAt:new Date().toISOString()});
       used+=r.used;
@@ -1477,7 +1603,7 @@ async function handleFiles(list){
   const ds=Object.keys(found).sort();
   const zmsg=zres.map(x=>x.msg).join('\n\n'), zbad=zres.some(x=>!x.ok);
   if(zres.some(x=>x.ok)) await loadAll();
-  if(!ds.length && !newSched){
+  if(!ds.length && !newSched && !newNav && !newMoves){
     if(zres.length){ setStatus(zmsg+(notes.length?'\n'+notes.join(' '):''), zbad?'err':'ok'); }
     else setStatus('Tidak ada data yang bisa dimuat. '+notes.join(' '),'err');
     ZEXP=null; busy=false; $('upload').disabled=false; return;
@@ -1488,8 +1614,11 @@ async function handleFiles(list){
   const parts=[];
   if(ds.length){ const rng = ds.length>1? fd(ds[0],{day:'numeric',month:'short'})+' sampai '+fd(ds[ds.length-1],{day:'numeric',month:'short',year:'numeric'}) : fd(ds[0]); parts.push(fmtN.format(used)+' baris penjualan, '+ds.length+' hari ('+rng+')'); }
   if(newSched) parts.push('jadwal & target '+newSched.people.length+' orang');
+  if(newNav) parts.push('Nota Penjualan NAV '+newNav.length+' nota');
+  if(newMoves) parts.push('Stock Movement '+movRows+' baris ('+Object.keys(newMoves).sort().map(d=>fd(d,{day:'numeric',month:'short'})).join(', ')+')');
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'. Menyimpan…');
-  const err=await persist(ds, newSched);
+  let err=await persist(ds, newSched);
+  if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves); if(e2) err=(err?err+' ':'')+e2; MV.ver++; mvRender(); }
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'.'+(err? ' '+err : (dbRef?' Tersimpan.':''))+(notes.length?' '+notes.join(' '):'')+(zmsg?'\n\n'+zmsg:''), err||notes.length||zbad?'warn':'ok');
   ZEXP=null; busy=false; $('upload').disabled=false;
 }
@@ -1527,6 +1656,7 @@ const CFG = window.APP_CONFIG || {};
 const SB = (window.supabase && CFG.SUPABASE_URL && CFG.SUPABASE_PUBLISHABLE_KEY && !/YOUR-/.test(CFG.SUPABASE_URL)) ? window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_PUBLISHABLE_KEY) : null;
 const TIM = new URLSearchParams(location.search).get('t');  // link tim sales: hanya baca, tanpa login
 if(TIM) document.body.classList.add('tim');
+mvReady=true;
 const bootEl=$('boot'), appEl=$('app');
 const bootMsg=(t,showOut)=>{ $('boot-msg').textContent=t; $('boot-out').hidden=!showOut; bootEl.hidden=false; appEl.hidden=true; $('psdock').hidden=true; };
 const toLogin=()=>{ try{sessionStorage.setItem('mitra10_next','dashboard.html')}catch(e){} location.replace('login.html?next=dashboard.html'); };
