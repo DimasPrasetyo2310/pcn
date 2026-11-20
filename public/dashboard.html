@@ -260,6 +260,7 @@ table.spvtb td.spok{color:#0e6b49;font-weight:600;background:#eaf7f0;white-space
 .spv .spsum>div[data-mvf]{cursor:pointer;transition:box-shadow .15s,transform .15s}.spv .spsum>div[data-mvf]:hover,.spv .spsum>div[data-mvf]:focus-visible{box-shadow:0 2px 10px rgba(0,0,0,.14);transform:translateY(-1px);outline:none}
 table.mvtb{width:100%;border-collapse:collapse;font-size:14px}table.mvtb th{position:sticky;top:0;text-align:left;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#fff;font-weight:700;padding:8px 10px;background:var(--navy);border-bottom:3px solid var(--amber)}table.mvtb th.rt,table.mvtb td.rt{text-align:right}table.mvtb td{padding:8px 10px;border-bottom:1px solid var(--grid)}table.mvtb td small{display:block;font-weight:400;font-size:11px;opacity:.85}
 table.mvtb td:nth-child(1),table.mvtb td:nth-child(2){text-align:left}table.mvtb td.rt{white-space:nowrap}
+table.cktb td{vertical-align:top}table.cktb td small{display:block;font-size:12px;opacity:.85;font-weight:400}table.cktb td.ckok{background:#e8f5ec;color:#16743f}table.cktb td.ckwr{background:#fff4d6;color:#8a5a00}table.cktb td.ckno{background:#fde8e6;color:#b42318}table.cktb td:nth-child(1){white-space:nowrap}table.cktb td b{font-weight:700}
 table.mvtb tr[data-mvr]{cursor:pointer}table.mvtb tr[data-mvr]:hover td{filter:brightness(.97)}table.mvtb td.mvok{background:#eaf7f0;color:#0e6b49;font-weight:700}table.mvtb td.mvno{background:#fdeceb;color:#b4271c;font-weight:700}table.mvtb tr.tot td{background:#f4f6fb}
 table.spvtb td.mvwarn{background:#fff4d6;color:#6b4a00;font-weight:600}
 
@@ -406,6 +407,13 @@ body.tim header .who,body.tim #databar,body.tim .kpis,body.tim .grid2,body.tim #
         <div class="ctl"><select id="mv-date" aria-label="Tanggal movement"></select><button type="button" class="btn" id="mv-shot" data-noshot title="Salin gambar HD ke clipboard, lalu tempel di WhatsApp">📷 Print screen</button></div></div>
       <div id="mv-body"></div>
     </section>
+
+    <section class="card" id="ck-card" hidden>
+      <div class="hd"><div><h2>Checklist database harian</h2><p class="hint">Status file per tanggal: Sales Detail salesperson, Nota Penjualan NAV, dan Report Stock Movement. Hijau = sudah masuk database, kuning = belum lengkap, merah = belum diupload.</p></div>
+        <div class="ctl"><button type="button" class="btn" id="ck-shot" data-noshot title="Salin gambar HD ke clipboard, lalu tempel di WhatsApp">📷 Print screen</button><select id="ck-rng" aria-label="Rentang tanggal checklist"><option value="14">14 hari terakhir</option><option value="mtd">Bulan ini</option><option value="30">30 hari terakhir</option><option value="60">60 hari terakhir</option></select></div></div>
+      <div id="ck-body"><p class="note">Memuat checklist…</p></div>
+    </section>
+
 
   <section class="card" id="detail-card">
     <div class="hd">
