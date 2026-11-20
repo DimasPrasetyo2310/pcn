@@ -1081,58 +1081,19 @@ function mvDraw(){
   const tb=rows.length?'<div class="spw" style="max-height:560px;overflow:auto"><table class="mvtb"><thead><tr><th>Sales ID</th><th>Nama sales</th><th class="rt">Item terjual</th><th class="rt">Tersedia di X333 (qty)</th><th>Movement</th></tr></thead><tbody>'+rows.map(r=>'<tr data-mvr="'+esc(r.id)+'" tabindex="0" title="Klik untuk melihat detail item"><td class="num">'+esc(mvShort(r.id))+'</td><td><b>'+esc(r.name)+'</b></td><td class="num rt">'+r.st.n+' <small>'+mvQ(r.st.q)+' qty</small></td><td class="num rt">'+(r.st.tn?mvQ(r.st.dq)+' / '+mvQ(r.st.tq):'–')+'</td><td class="'+(r.ok?'mvok':'mvno')+'">'+(r.st.tn===0?'✓ Done <small>tidak ada task (auto)</small>':r.ok?'✓ Done <small>'+r.st.dn+'/'+r.st.tn+' task</small>':'✕ Belum <small>'+r.st.dn+'/'+r.st.tn+' task · sisa '+mvQ(r.st.tq-r.st.dq)+' qty</small>')+'</td></tr>').join('')+'<tr class="tot"><td colspan="2"><b>TOTAL ('+rows.length+' orang)</b></td><td class="num rt"><b>'+S.n+'</b> <small>'+mvQ(S.q)+' qty</small></td><td class="num rt"><b>'+mvQ(S.dq)+' / '+mvQ(S.tq)+'</b></td><td><b>'+S.dn+'/'+S.tn+' task</b></td></tr></tbody></table></div>':'<p class="note">Tidak ada item terjual pada tanggal ini.</p>';
   b.innerHTML='<div class="spv">'+(warn.length?'<div class="spwarn">'+warn.map(w=>'<div>⚠ '+w+'</div>').join('')+'</div>':'')+'<div class="spsum mvsum">'+tiles+'</div></div>'+tb+'<p class="note">Wajib movement: Cash&amp;Carry via Pickup &amp; Delivery, Cash&amp;Carry via Gudang Store, dan Bawa Langsung (kolom NP No kosong, atau NP belum ada di file NAV). Type lain otomatis ✓. Qty movement dibagi ke salesperson berdasarkan urutan jam penjualan; item yang sama dijumlahkan per tanggal. Klik kartu atau nama untuk melihat detail item.'+(R.moves_n?' Stock Movement terakhir diupload '+esc(new Date(R.moves_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))+' WIB.':'')+'</p>';
 }
-/* ---- Checklist database harian: Sales Detail / Nota Penjualan NAV / Report Stock Movement ---- */
-let CK={rng:'14',rows:null,err:'',busy:false,ver:0,want:true};
+/* ---- Status upload per tanggal (NAV & Stock Movement) untuk tombol "Checklist database" ---- */
+let CK={rows:null,key:'',busy:false,fail:''};
+const ckVer=()=>'';
 const ckAdd=(d,n)=>{ const t=new Date(d+'T00:00:00Z'); t.setUTCDate(t.getUTCDate()+n); return t.toISOString().slice(0,10); };
 const ckWib=t=>{ if(!t) return ''; const x=new Date(t); if(isNaN(x)) return ''; return x.toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).replace('.',':')+' WIB'; };
-function ckRange(){ const today=new Date(Date.now()+7*3600e3).toISOString().slice(0,10); const from=CK.rng==='mtd'?today.slice(0,8)+'01':ckAdd(today,-(+CK.rng-1)); return [from,today]; }
+function ckKey(){ const P=ckPeriod(); return [P.y+'-'+String(P.m).padStart(2,'0')+'-01',P.ref]; }
 /*CKFETCH*/async function ckFetch(from,to){ const { data, error } = await SB.rpc('upload_checklist',{p_store:D.code,p_from:from,p_to:to}); if(error||!data||!data.ok) throw new Error(error?(error.message||error.code):'tidak ada akses'); return data.rows||[]; }/*ENDCKFETCH*/
 async function ckLoad(){
-  if(CK.busy){ CK.want=true; return; } CK.busy=true; CK.want=false; CK.err='';
-  const [f,t]=ckRange();
-  try{ CK.rows=await ckFetch(f,t); }catch(e){ CK.rows=null; CK.err='Checklist belum bisa dimuat ('+(e&&e.message||e)+').'; }
-  CK.busy=false; ckDraw(); if(CK.want) ckLoad();
+  if(CK.busy) return; const [f,t]=ckKey(), key=f+'|'+t+'|'+ckVer(); CK.busy=true; CK.fail='';
+  try{ CK.rows=await ckFetch(f,t); CK.key=key; }catch(e){ CK.rows=null; CK.fail=key; CK.err=String(e&&e.message||e); }
+  CK.busy=false; renderChecklist();
 }
-function ckEval(r){
-  const so=r.sales_ok, sOk=so&&r.has_np, sWarn=so&&!r.has_np;
-  const nNone=so&&r.np_total===0&&r.nav_rows===0, nOk=nNone||(r.nav_rows>0&&r.np_found>=r.np_total), nWarn=!nOk&&r.nav_rows>0, nNo=!nOk&&!nWarn;
-  const mOk=r.mv_items>0, mNo=!mOk;
-  const miss=[]; if(!so) miss.push('Sales Detail'); else if(sWarn) miss.push('No Nota di Sales Detail'); if(nNo) miss.push('NAV'); else if(nWarn) miss.push('NP baru di NAV'); if(mNo) miss.push('Stock Movement');
-  const full=sOk&&nOk&&mOk;
-  return {sOk,sWarn,so,nOk,nWarn,nNo,nNone,mOk,mNo,full,miss, anyNo:(!so)||nNo||mNo};
-}
-function ckCell(ok,warn,t1,t2){ return '<td class="'+(ok?'ckok':warn?'ckwr':'ckno')+'"><b>'+(ok?'✓':warn?'⚠':'✕')+'</b> '+t1+(t2?'<small>'+t2+'</small>':'')+'</td>'; }
-function ckDraw(){
-  const b=$('ck-body'); if(!b) return;
-  if(!CK.rows){ b.innerHTML='<p class="note">'+esc(CK.err||'Memuat checklist…')+'</p>'; return; }
-  const R=CK.rows.map(r=>({r,e:ckEval(r)}));
-  const full=R.filter(x=>x.e.full).length, tot=R.length;
-  const cnt=k=>R.filter(x=>x.e[k]).length;
-  const sum='<div class="spsum mvsum" style="grid-template-columns:repeat(4,1fr)">'+
-    '<div class="'+(full===tot?'apok':'apno')+'"><small>Hari lengkap</small><b>'+full+' / '+tot+'</b><span>3 file terupload &amp; cocok</span></div>'+
-    '<div><small>Sales Detail</small><b>'+cnt('sOk')+' / '+tot+'</b><span>ada No Nota per item</span></div>'+
-    '<div><small>Nota Penjualan NAV</small><b>'+cnt('nOk')+' / '+tot+'</b><span>semua NP ditemukan</span></div>'+
-    '<div><small>Stock Movement</small><b>'+cnt('mOk')+' / '+tot+'</b><span>ada report harian</span></div></div>';
-  const rows=R.map(({r,e})=>{
-    const sT=e.sOk?fmtN.format(r.sales_lines)+' item':e.sWarn?'belum ada No Nota':'belum diupload';
-    const sS=r.sales_ok?(ckWib(r.sales_at)+(r.sales_by?' · '+esc(String(r.sales_by).split('@')[0]):'')):(e.sWarn?'upload ulang file':'');
-    const nT=e.nNone?'tidak ada NP':e.nOk?fmtN.format(r.nav_rows)+' nota':e.nWarn?(r.np_total-r.np_found)+' NP belum ada':'belum diupload';
-    const nS=e.nNone?'':(r.np_total?r.np_found+'/'+r.np_total+' NP ketemu':'')+(r.nav_at?(r.np_total?' · ':'')+ckWib(r.nav_at):'');
-    const mT=e.mOk?fmtN.format(r.mv_items)+' item':'belum diupload', mS=e.mOk?ckWib(r.mv_at):'';
-    const st=e.full?'<td class="ckok"><b>✓ Lengkap</b></td>':'<td class="'+(e.anyNo?'ckno':'ckwr')+'"><b>'+(e.anyNo?'✕ Kurang':'⚠ Cek')+'</b><small>'+esc(e.miss.join(', '))+'</small></td>';
-    return '<tr><td><b>'+esc(fd(r.d,{weekday:'short',day:'numeric',month:'short'}))+'</b></td>'+ckCell(e.sOk,e.sWarn,sT,sS)+ckCell(e.nOk,e.nWarn,nT,nS)+ckCell(e.mOk,false,mT,mS)+st+'</tr>';
-  }).join('');
-  b.innerHTML=sum+'<div class="spw" style="max-height:560px;overflow:auto"><table class="mvtb cktb"><thead><tr><th>Tanggal</th><th>Sales Detail salesperson</th><th>Nota Penjualan NAV</th><th>Report Stock Movement</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
-    '<p class="note">✓ = sudah masuk database · ⚠ = masuk tetapi belum lengkap (Sales Detail tanpa No Nota, atau ada NP yang belum ada di file NAV) · ✕ = belum diupload. Tanggal tanpa file apa pun juga tampil ✕.</p>';
-}
-function ckRender(){
-  const card=$('ck-card'); if(!card||!mvReady) return;
-  if(!SB||TIM){ card.hidden=true; return; }
-  card.hidden=false; $('ck-rng').value=CK.rng;
-  if(CK.rows===null&&!CK.busy) ckLoad(); else ckDraw();
-}
-document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='ck-rng'){ CK.rng=ev.target.value; CK.rows=null; ckDraw(); ckLoad(); } });
-document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('#ck-shot'); if(b&&window.DomShot) DomShot($('ck-card'),'checklist-database-harian.png',{btn:b}); });
+function ckRefresh(){ CK.rows=null; CK.fail=''; ckLoad(); }
 function mvPop(who,f){ MVP={who,f}; mvPopDraw(true); }
 function mvPopDraw(open){
   if(!MV.data||!MVP) return; const d=MV.d, all=(MV.data.lines||[]).filter(l=>MVP.who===null||l[0]===MVP.who), S=mvStat(all);
@@ -1162,7 +1123,7 @@ document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.clo
   else if(b.id==='kpop-shot'){ el=document.querySelector('#kpop .pop'); nm=DomShot.slug($('kpop-t').textContent)+(dt?'-'+dt:''); }
   else { el=document.querySelector('#pop .pop'); nm=DomShot.slug($('pop-name').textContent||'detail'); }
   if(el) DomShot(el,nm+'.png',{btn:(b.id==='mv-shot'||b.id==='sp-shot')?b:null}); });
-function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); ckRender(); mvRender(); renderTable(); renderLow(); renderFoot(); }
+function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));
 $('topn').addEventListener('change',e=>{ S.topn=parseInt(e.target.value,10); renderRank(); });
@@ -1504,6 +1465,26 @@ function ckItems(){
   const itOld=old(itOk), itBad=miss.concat(itOld).sort();
   mk('item','Detail item per salesperson (pop up)','File: Sales Detail Report (kolom Item No, Item Name, Qty)',itBad,null,'Lengkap sampai '+ckLab(P.ref),itBad.length+' tanggal belum ada atau perlu unggah ulang',
     [miss.length?'Belum ada: '+ckDates(miss):'',itOld.length?'Perlu diunggah ulang (data lama belum memuat detail item): '+ckDates(itOld):'',!itBad.length?'Semua tanggal memuat detail item.':'','Isi: category, master brand, no item, deskripsi, qty, dan value per salesperson.'],['sales']);
+  const npOk=x=>!!(x.mvx||(x.people||[]).some(p=>p.mv)), npOld=old(npOk), npBad=miss.concat(npOld).sort();
+  mk('np','No Nota dan jam per item (Task Order Movement)','File: Sales Detail Report (kolom Nota Penjualan No, jam transaksi, Item No)',npBad,null,'Lengkap sampai '+ckLab(P.ref),npBad.length+' tanggal belum ada atau perlu unggah ulang',
+    [miss.length?'Belum ada: '+ckDates(miss):'',npOld.length?'Perlu diunggah ulang (data lama belum memuat No Nota per item): '+ckDates(npOld):'',!npBad.length?'Semua tanggal memuat No Nota per item.':'','Isi: Nota Penjualan No per item. Kosong = Bawa Langsung. Dipakai untuk menentukan Type MS di Task Order Movement.'],['sales']);
+  { // Nota Penjualan NAV dan Report Stock Movement: status per tanggal dari database
+    const kk=ckKey().join('|')+'|'+ckVer(), ok=CK.rows&&CK.key===kk, R={}; (ok?CK.rows:[]).forEach(r=>{R[r.d]=r;});
+    const wait=!ok&&!CK.fail, fl=!ok&&!!CK.fail, st=wait?'Memuat status dari database…':'Status belum bisa dibaca dari database ('+(CK.err||'gagal')+')';
+    const withS=exp.filter(d=>days[d]);
+    const navNo=withS.filter(d=>R[d]&&R[d].np_total>0&&!(R[d].nav_rows>0)), navWr=withS.filter(d=>R[d]&&R[d].nav_rows>0&&R[d].np_found<R[d].np_total);
+    const navNone=withS.filter(d=>R[d]&&R[d].np_total===0&&!(R[d].nav_rows>0));
+    const nvl=navWr.map(d=>ckLab(d)+' ('+(R[d].np_total-R[d].np_found)+' NP)').slice(0,8).join(', ');
+    out.push({id:'nav',title:'Nota Penjualan NAV (Type MS)',file:'File: Nota Penjualan dari NAV (kolom No Nota Penjualan dan Type). Ekspor setelah jam penjualan selesai.',
+      state:!ok?'warn':navNo.length?'bad':navWr.length?'warn':'ok',
+      summary:!ok?(wait?st:st):navNo.length?navNo.length+' tanggal belum ada NAV':navWr.length?navWr.length+' tanggal ada NP belum masuk NAV':'Lengkap sampai '+ckLab(P.ref),
+      lines:[!ok?st:'',navNo.length?'Belum ada NAV: '+ckDates(navNo):'',navWr.length?'NP belum ada di NAV (dianggap Bawa Langsung): '+nvl:'',ok&&!navNo.length&&!navWr.length?'Semua NP penjualan sudah ada di NAV.':'',navNone.length?'Tanpa No Nota (tidak perlu NAV): '+ckDates(navNone):'','Isi: Type MS tiap Nota Penjualan. NP yang tidak ada di NAV dihitung Bawa Langsung (wajib movement).'].filter(Boolean),tpl:null});
+    const mvNo=withS.filter(d=>R[d]&&!(R[d].mv_items>0));
+    out.push({id:'mvr',title:'Report Stock Movement',file:'File: Report Stock Movement (kolom Item No, Qty, lokasi tujuan X333)',
+      state:!ok?'warn':mvNo.length?'bad':'ok',
+      summary:!ok?st:mvNo.length?mvNo.length+' tanggal belum ada Stock Movement':'Lengkap sampai '+ckLab(P.ref),
+      lines:[!ok?st:'',mvNo.length?'Belum ada: '+ckDates(mvNo):'',ok&&!mvNo.length?'Semua tanggal penjualan sudah punya data Stock Movement.':'','Isi: qty item yang dipindah ke X333. Dipakai menghitung Done / Belum di Task Order Movement.'].filter(Boolean),tpl:null});
+  }
   const ms=hasS? exp.filter(d=>!sd.has(d)) : exp;
   mk('sched','Target dan daftar salesperson (admin, bulanan)','File: jadwal & target (kolom SALES ID, TARGET/DAY, lalu kolom tanggal)',ms,null,hasS? SCH.people.length+' orang, sampai '+ckLab(SCH.dates[SCH.dates.length-1]) : '',hasS? ms.length+' tanggal belum ada di jadwal' : 'Belum ada file jadwal',
     [hasS? (ms.length?'Belum ada di jadwal: '+ckDates(ms):'Semua tanggal 1 sampai '+ckLab(P.ref)+' ada di jadwal.') : 'Belum ada jadwal & target.','Isi: kode jadwal harian (S/P/M/OFF dst), zonasi, master brand, category, TARGET/DAY dan TARGET/MONTH.'],['sched']);
@@ -1559,10 +1540,11 @@ function renderCk(pf,it,label,sub){
   $(pf+'Btn').className='ckbtn '+worst; $(pf+'Btn').innerHTML='<span class="ckdot"></span>'+label+' <b>'+nOk+'/'+it.length+'</b>';
   const ic={ok:'✓',warn:'!',bad:'✕'}, esc2=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   $(pf+'List').innerHTML=it.map((x,i)=>'<li class="ckrow '+x.state+(CKOPEN[x.id]?' open':'')+'"><button type="button" class="ckhead" data-ck="'+x.id+'" aria-expanded="'+!!CKOPEN[x.id]+'"><span class="ckic">'+ic[x.state]+'</span><span class="cktx"><b>'+(i+1)+'. '+x.title+'</b><small>'+esc2(x.summary)+'</small></span><span class="ckch">▾</span></button>'
-    +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="'+(x.id.startsWith('z:')?x.id.slice(2):'1')+'">'+(x.id.startsWith('z:')?'Unggah jadwal zona':'Unggah file')+'</button>':'')+'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh '+(x.id.startsWith('z:')?'format zona (terisi)':'template')+'</button></div></div></li>').join('');
+    +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="'+(x.id.startsWith('z:')?x.id.slice(2):'1')+'">'+(x.id.startsWith('z:')?'Unggah jadwal zona':'Unggah file')+'</button>':'')+(x.tpl?'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh '+(x.id.startsWith('z:')?'format zona (terisi)':'template')+'</button>':'')+'</div></div></li>').join('');
   $(pf+'Sub').textContent=sub;
 }
 function renderChecklist(){
+  { const k=ckKey().join('|')+'|'+ckVer(); if(!CK.busy&&CK.key!==k&&CK.fail!==k&&typeof dbReady!=='undefined'&&dbReady) setTimeout(ckLoad,0); }
   const P=ckPeriod(), sub='Periode '+CKMON[P.m-1]+' '+P.y+', sampai '+ckLab(P.ref)+' (mengikuti tanggal "Sampai")';
   renderCk('ck',ckItems(),'Checklist database',sub);
   renderCk('ab',abItems(),'Checklist absensi',sub+'. Zona yang jadwalnya sudah ada dianggap sudah input.');
@@ -1699,9 +1681,9 @@ async function handleFiles(list){
   if(newMoves) parts.push('Stock Movement '+movRows+' baris ('+Object.keys(newMoves).sort().map(d=>fd(d,{day:'numeric',month:'short'})).join(', ')+')');
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'. Menyimpan…');
   let err=await persist(ds, newSched);
-  if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves); if(e2) err=(err?err+' ':'')+e2; MV.ver++; Object.keys(MVC).forEach(k=>delete MVC[k]); CK.rows=null; ckRender(); mvRender(); }
+  if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves); if(e2) err=(err?err+' ':'')+e2; MV.ver++; Object.keys(MVC).forEach(k=>delete MVC[k]); mvRender(); }
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'.'+(err? ' '+err : (dbRef?' Tersimpan.':''))+(notes.length?' '+notes.join(' '):'')+(zmsg?'\n\n'+zmsg:''), err||notes.length||zbad?'warn':'ok');
-  ZEXP=null; busy=false; $('upload').disabled=false; CK.rows=null; ckRender();
+  ZEXP=null; busy=false; $('upload').disabled=false; ckRefresh();
 }
 async function removeDate(d){
   delete localOverlay[d];
