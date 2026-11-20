@@ -52,3 +52,7 @@ grant execute on function public.tim_view_data(text) to anon, authenticated;
 --   Cash&Carry via Gudang Store, dan Bawa Langsung (NP kosong); qty Stock Movement dibagi FIFO menurut jam penjualan.
 -- mv_report(store,date) untuk dashboard (login), sp_mv_view(key,code) untuk halaman salesperson (anon, 7 hari terakhir).
 -- Migrasi sp_appr_stamp_fix_anon: trigger sp_appr_stamp melewati cek peran bila app.approver diset (approval lewat HP salesperson).
+
+-- 2026-11-20: NP yang tidak ada di file NAV diperlakukan sebagai "Bawa Langsung" (wajib movement).
+-- Migrasi "mv_lines_np_tidak_ada_bawa_langsung" mengubah public._mv_lines: typ='Bawa Langsung', need=true, known=true
+-- bila np kosong ATAU np tidak ditemukan di mv_nav.
