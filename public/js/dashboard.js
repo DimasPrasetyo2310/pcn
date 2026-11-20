@@ -493,7 +493,7 @@ function renderMPP(){
   }
 
 const COLS = [
-  ['rank','#'],['id','Sales ID'],['name','Salesperson'],['zona','Zonasi'],['code','Jadwal'],['cat','Kategori utama'],['mbrand','Master brand'],['sales','Penjualan'],['brand','Penjualan master brand'],['nonbrand','Penjualan non master brand'],['target','Target'],['ach','Pencapaian'],['wd','Hari kerja'],['share','% total'],['receipts','Struk'],['avg','Basket Size']
+  ['rank','#'],['id','Sales ID'],['name','Salesperson'],['zona','Zonasi'],['code','Jadwal'],['cat','Kategori utama'],['mbrand','Master brand'],['sales','Penjualan'],['brand','Penjualan master brand'],['nonbrand','Penjualan non master brand'],['target','Target'],['ach','Pencapaian'],['mv','Movement'],['wd','Hari kerja'],['share','% total'],['receipts','Struk'],['avg','Basket Size']
 ];
 const TXT = new Set(['id','name','cat','zona','code','mbrand']);
 const CODE_ORDER = ['S','P','M','P/JKP','P.JKP','S/JKS','S.JKS','OFF','CT','L','MT','OT','OUTING'];
@@ -550,7 +550,7 @@ function renderTableInner(dr){
   const sd = schDate();
   $('thead').innerHTML = cols.map(c=>{
     const act = S.sort===c[0];
-    const label = c[0]==='code' ? 'Jadwal '+shortD(sd) : c[1];
+    const label = c[0]==='code' ? 'Jadwal '+shortD(sd) : c[0]==='mv' ? 'Movement'+(mvDateLbl()?' '+mvDateLbl():'') : c[1];
     return '<th scope="col" class="'+(TXT.has(c[0])?'l':'')+'"'+(act?' aria-sort="'+(S.dir<0?'descending':'ascending')+'"':'')+'><button type="button" data-s="'+c[0]+'">'+label+(act?(S.dir<0?' ↓':' ↑'):'')+'</button></th>';
   }).join('');
   const q = S.q.trim().toLowerCase();
@@ -562,7 +562,7 @@ function renderTableInner(dr){
     base = base.filter(p=>schMatch(codeOn(p.id,sd)));
   }
   const ratio = p => p.target>0 ? p.sales/p.target : -1;
-  const val = (p,k)=> k==='share'?p.sales : k==='brand'?brandSales(p) : k==='nonbrand'?nonBrand(p) : k==='mbrand'?String(p.brand||'').toLowerCase() : k==='id'?String(p.id||'').toLowerCase() : k==='ach'?ratio(p) : k==='target'?(p.target==null?-1:p.target) : k==='code'?codeOn(p.id,sd) : k==='rank'?(p.rank==null?1e9:p.rank) : TXT.has(k)?String(p[k]||'').toLowerCase() : p[k];
+  const val = (p,k)=> k==='share'?p.sales : k==='brand'?brandSales(p) : k==='nonbrand'?nonBrand(p) : k==='mbrand'?String(p.brand||'').toLowerCase() : k==='id'?String(p.id||'').toLowerCase() : k==='mv'?mvRank(p.id) : k==='ach'?ratio(p) : k==='target'?(p.target==null?-1:p.target) : k==='code'?codeOn(p.id,sd) : k==='rank'?(p.rank==null?1e9:p.rank) : TXT.has(k)?String(p[k]||'').toLowerCase() : p[k];
   const L = base.filter(p=>!q||p.name.toLowerCase().includes(q)).sort((a,b)=>{
     const x=val(a,S.sort), y=val(b,S.sort); return (x<y?-1:x>y?1:0)*S.dir; });
   const mx = Math.max(1,...P.map(p=>p.sales));
@@ -575,11 +575,11 @@ function renderTableInner(dr){
     if(hasT){
       t+='<td class="num">'+(p.target==null?'–':p.target===0?'<span style="color:var(--ink3)">tidak ada</span>':rp(p.target))+'</td>'+
         '<td class="num">'+(p.target>0? '<span class="pill '+(a>=1?'hi':a>=.75?'mid':'lo')+'">'+(a>=1?'✓ ':'')+Math.round(a*100)+'%</span>' : '–')+'</td>'+
-        '<td class="num">'+(p.hasSch&&p.cov? p.wd : '–')+'</td>';
+        mvTd(p.id)+'<td class="num">'+(p.hasSch&&p.cov? p.wd : '–')+'</td>';
     }
-    t+='<td class="num">'+pct(p.sales/(M.total||1))+'</td><td class="num">'+p.receipts+'</td><td class="num">'+(p.lines?rp(p.avg):'–')+'</td>';
+    t+=(hasT?'':mvTd(p.id))+'<td class="num">'+pct(p.sales/(M.total||1))+'</td><td class="num">'+p.receipts+'</td><td class="num">'+(p.lines?rp(p.avg):'–')+'</td>';
     return t+'</tr>';
-  }).join('') || '<tr><td colspan="16" style="text-align:center;color:var(--ink3)">Tidak ada orang yang cocok dengan filter.</td></tr>';
+  }).join('') || '<tr><td colspan="17" style="text-align:center;color:var(--ink3)">Tidak ada orang yang cocok dengan filter.</td></tr>';
   $('tbl-hint').textContent = L.length+' orang'+(dr? ' · '+(S.dMode==='mtd'?'MTD ':'')+shortD(dr.from)+(dr.to!==dr.from?' sampai '+fd(dr.to,{day:'numeric',month:'short',year:'numeric'}):'')+' ('+M.days+' hari)' : '')+(S.schSel.length? ' · jadwal '+schLabel()+' pada '+shortD(sd) : '')+' · klik judul kolom untuk mengurutkan';
   $('thead').querySelectorAll('button').forEach(bt=>bt.addEventListener('click',()=>{
     const k=bt.dataset.s; if(S.sort===k) S.dir*=-1; else {S.sort=k; S.dir=TXT.has(k)?1:-1;} renderTable(); }));
@@ -1035,6 +1035,12 @@ let MV={d:'',data:null,key:'',ver:0,busy:false,err:''}, MVP=null, mvReady=false;
 const mvName=(d,id)=>{ if(!id) return '(Tanpa salesperson)'; const q=days[d]&&(days[d].people||[]).find(x=>x.id===id); return (q&&q.name)||(SCHM[id]&&SCHM[id].name)||id; };
 const mvShort=id=>id?String(id).replace(/^S10005-0*/,''):'–';
 const mvQ=v=>fmtN.format(Math.round(v*100)/100);
+let MVSM=null, MVSMD=null;
+function mvMap(){ if(!mvReady||!MV.data||!MV.data.lines) return null; if(MVSMD===MV.data&&MVSM) return MVSM; const g={}; MV.data.lines.forEach(l=>{ (g[l[0]]||(g[l[0]]=[])).push(l); }); const m={}; Object.keys(g).forEach(id=>{ const s=mvStat(g[id]); m[id]=!s.tn?{k:'auto',t:'Auto',s}:(s.dn===s.tn?{k:'done',t:'✓ Done',s}:{k:'belum',t:'✕ '+s.dn+'/'+s.tn,s}); }); MVSMD=MV.data; return MVSM=m; }
+function mvBadge(id){ const m=mvMap(); if(!m) return {k:'none',t:'–'}; return m[id]||{k:'none',t:'–'}; }
+function mvRank(id){ const k=mvBadge(id).k; return k==='done'?3:k==='belum'?2:k==='auto'?1:0; }
+function mvDateLbl(){ return (mvReady&&MV.data&&MV.d)?shortD(MV.d):''; }
+function mvTd(id){ const b=mvBadge(id); const h=b.k==='done'?'<span class="pill hi">✓ Done</span>':b.k==='belum'?'<span class="pill lo">✕ '+b.s.dn+'/'+b.s.tn+'</span>':b.k==='auto'?'<span style="color:var(--ink3)" title="Hanya item type lain (auto checklist)">Auto</span>':'–'; return '<td class="num" title="Task order movement'+(mvDateLbl()?' '+mvDateLbl():'')+'">'+h+'</td>'; }
 function mvStat(L){ const s={n:0,q:0,tn:0,tq:0,dn:0,dq:0,an:0,unk:0}; L.forEach(l=>{ s.n++; s.q+=l[5]; if(l[7]){ s.tn++; s.tq+=l[5]; if((l[9]||0)>=l[5]) s.dn++; s.dq+=Math.min(l[5],l[9]||0); } else { s.an++; if(!l[8]) s.unk++; } }); return s; }
 async function mvLoad(key){
   MV.key=key; MV.busy=true; MV.err=''; const d=MV.d;
@@ -1042,6 +1048,7 @@ async function mvLoad(key){
   MV.busy=false; if(MV.d!==d||MV.again){ MV.again=false; MV.key=''; mvRender(); return; }
   if(error||!data||!data.ok){ MV.data=null; MV.err='Data movement belum bisa dimuat'+(error?' ('+(error.message||error.code)+')':'')+'.'; MV.key=''; } else MV.data=data;
   mvDraw(); if(MVP&&!$('kpop').hidden) mvPopDraw();
+  try{ if(typeof renderTable==='function'&&lastL&&lastL.length) renderTable(); }catch(e){}
 }
 function mvRender(){
   const card=$('mv-card'); if(!card||!mvReady) return;
@@ -1116,18 +1123,18 @@ function shotPages(){
   if(lastHasT && !S.schSel.length) f.push('Tanggal jadwal '+shortD(sd)); if(S.schSel.length) f.push('Jadwal '+schLabel()+' ('+shortD(sd)+')'); if(lastDr) f.push((S.dMode==='mtd'?'MTD':'Rentang tabel')+' '+lastM.days+' hari'); if(q) f.push('Cari "'+q+'"');
   const period = lastM.from? (lastM.from===lastM.to? fd(lastM.from) : fd(lastM.from,{day:'numeric',month:'short'})+' sampai '+fd(lastM.to)) : '';
   const cellsOf=p=>{ const cd=codeOn(p.id,sd); return hasT
-      ? [p.rank==null?'–':p.rank, p.id, p.name, p.zona||'–', cd||'–', p.brand?title(p.brand):'–', rp(p.sales), p.brand?brandSales(p):null, p.brand?rp(nonBrand(p)):'–', p.target==null?'–':p.target===0?'tidak ada':rp(p.target), null]
-      : [p.rank==null?'–':p.rank, p.id, p.name, p.cat?title(p.cat):'–', rp(p.sales), pct(p.sales/(lastM.total||1)), p.receipts]; };
+      ? [p.rank==null?'–':p.rank, p.id, p.name, p.zona||'–', cd||'–', p.brand?title(p.brand):'–', rp(p.sales), p.brand?brandSales(p):null, p.brand?rp(nonBrand(p)):'–', p.target==null?'–':p.target===0?'tidak ada':rp(p.target), null, mvBadge(p.id)]
+      : [p.rank==null?'–':p.rank, p.id, p.name, p.cat?title(p.cat):'–', rp(p.sales), pct(p.sales/(lastM.total||1)), p.receipts, mvBadge(p.id)]; };
   const mc=document.createElement('canvas').getContext('2d'), mw=(t,f)=>{ mc.font=f; return mc.measureText(String(t)).width; };
   const HF='700 15px '+FONT, bodyF=i=>(i===1?'400 18px ':(i===2?'500 24px ':'400 24px '))+FONT;
   const spec = hasT
-    ? [['#','r',44,60],['Sales ID','l',150,230],['Salesperson','l',190,300],['Zonasi','l',92,130],['Jadwal '+shortD(sd),'l',92,150],['Master brand','l',140,220],['Penjualan (Rp)','r',130,230],['Penjualan master brand (Rp)','bt',150,240],['Non master brand (Rp)','r',130,230],['Target (Rp)','r',130,230],['Pencapaian','bar',190,190]]
-    : [['#','r',44,60],['Sales ID','l',150,230],['Salesperson','l',190,300],['Kategori utama','l',180,300],['Penjualan (Rp)','r',130,230],['% total','r',100,160],['Struk','r',80,120]];
+    ? [['#','r',44,60],['Sales ID','l',150,230],['Salesperson','l',190,300],['Zonasi','l',92,130],['Jadwal '+shortD(sd),'l',92,150],['Master brand','l',140,220],['Penjualan (Rp)','r',130,230],['Penjualan master brand (Rp)','bt',150,240],['Non master brand (Rp)','r',130,230],['Target (Rp)','r',130,230],['Pencapaian','bar',190,190],['Movement'+(mvDateLbl()?' '+mvDateLbl():''),'mvc',120,170]]
+    : [['#','r',44,60],['Sales ID','l',150,230],['Salesperson','l',190,300],['Kategori utama','l',180,300],['Penjualan (Rp)','r',130,230],['% total','r',100,160],['Struk','r',80,120],['Movement'+(mvDateLbl()?' '+mvDateLbl():''),'mvc',120,170]];
   const hl=h=>{ const t=h.toUpperCase(), w=t.split(' '); if(w.length<2||mw(t,HF)<=118) return [t]; const m=Math.ceil(w.length/2); return [w.slice(0,m).join(' '),w.slice(m).join(' ')]; };
   const rn=v=>typeof v==='string'? v.replace(/^Rp\s?/,'') : v, RI=hasT? [6,8,9] : [4];
   const allCells=rowsAll.map(p=>cellsOf(p).map((v,i)=>RI.includes(i)? rn(v) : v));
   const cols=spec.map((k,i)=>{ let w=Math.max(...hl(k[0]).map(t=>mw(t,HF)));
-    allCells.forEach((c,r)=>{ if(k[1]==='bar') return; const v=c[i]; if(v==null) return; const t=k[1]==='bt'? rn(rp(v)) : v; w=Math.max(w,mw(t,bodyF(i))); });
+    allCells.forEach((c,r)=>{ if(k[1]==='bar') return; if(k[1]==='mvc'){ const bd=c[i]; if(bd&&bd.t&&bd.k!=='none'&&bd.k!=='auto') w=Math.max(w,mw(bd.t,'700 20px '+FONT)+50); return; } const v=c[i]; if(v==null) return; const t=k[1]==='bt'? rn(rp(v)) : v; w=Math.max(w,mw(t,bodyF(i))); });
     w=k[1]==='bar'? k[2] : Math.min(k[3],Math.max(k[2],Math.ceil(w)+24)); return {h:k[0],al:k[1],w,lines:hl(k[0])}; });
   let tw=cols.reduce((a,c)=>a+c.w,0); const W=Math.max(1320,Math.round(tw+padX*2)); const sc=(W-padX*2)/tw; cols.forEach(c=>c.w=c.w*sc); tw=W-padX*2;
   const pages=Math.max(1,Math.ceil(rowsAll.length/PAGE)), headH=124, thH=64, rowH=58, footH=64, out=[];
@@ -1144,7 +1151,7 @@ function shotPages(){
     let y=headH; g.fillStyle='#0f2547'; g.fillRect(padX,y,tw,thH); g.fillStyle='#f5a800'; g.fillRect(padX,y+thH-3,tw,3);
     g.font=HF; g.fillStyle='#ffffff';
     const cx=i=>padX+cols.slice(0,i).reduce((a,x)=>a+x.w,0);
-    cols.forEach((k,i)=>{ const x=cx(i), l=k.al==='l'; g.textAlign=l?'left':'right'; k.lines.forEach((t,j)=>g.fillText(t,l?x+12:x+k.w-12,y+(thH-3)/2+(j-(k.lines.length-1)/2)*18)); });
+    cols.forEach((k,i)=>{ const x=cx(i), l=(k.al==='l'||k.al==='mvc'); g.textAlign=l?'left':'right'; k.lines.forEach((t,j)=>g.fillText(t,l?x+12:x+k.w-12,y+(thH-3)/2+(j-(k.lines.length-1)/2)*18)); });
     y+=thH;
     rows.forEach((p,r)=>{
       const a=p.target>0? p.sales/p.target : -1, cells=allCells[pg*PAGE+r];
@@ -1158,6 +1165,7 @@ function shotPages(){
           else { g.font='400 24px '+FONT; g.textAlign='right'; g.fillStyle='#7a7975'; g.fillText('–',x+w-12,mid); }
           return;
         }
+        if(k.al==='mvc'){ const bd=cells[i]; if(bd&&bd.t&&bd.k!=='none'&&bd.k!=='auto'){ g.font='700 20px '+FONT; const tw2=g.measureText(bd.t).width+26; g.fillStyle=bd.k==='done'?'#e3f4ea':'#fde8e6'; g.beginPath(); (g.roundRect?g.roundRect(x+12,mid-17,tw2,34,17):g.rect(x+12,mid-17,tw2,34)); g.fill(); g.fillStyle=bd.k==='done'?'#16743f':'#b42318'; g.textAlign='left'; g.fillText(bd.t,x+25,mid+1); } else { g.font='400 22px '+FONT; g.textAlign='left'; g.fillStyle='#7a7975'; g.fillText(bd&&bd.t?bd.t:'–',x+12,mid); } return; }
         if(k.al==='bt'){ g.textAlign='right'; if(cells[i]==null){ g.font=bodyF(i); g.fillStyle='#7a7975'; g.fillText('–',x+w-12,mid); } else { g.font=bodyF(i); g.fillStyle='#0b0b0b'; g.fillText(rn(rp(cells[i])),x+w-12,mid-9); g.font='400 15px '+FONT; g.fillStyle='#7a7975'; g.fillText(fit(title(p.brand),w-24),x+w-12,mid+13); } return; }
         const l=k.al==='l'; g.textAlign=l?'left':'right';
         g.font=bodyF(i); g.fillStyle=(i===0||cells[i]==='–'||cells[i]==='tidak ada')?'#7a7975':'#0b0b0b';
