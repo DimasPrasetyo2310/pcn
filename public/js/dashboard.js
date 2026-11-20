@@ -1471,19 +1471,19 @@ function ckItems(){
   { // Nota Penjualan NAV dan Report Stock Movement: status per tanggal dari database
     const kk=ckKey().join('|')+'|'+ckVer(), ok=CK.rows&&CK.key===kk, R={}; (ok?CK.rows:[]).forEach(r=>{R[r.d]=r;});
     const wait=!ok&&!CK.fail, fl=!ok&&!!CK.fail, st=wait?'Memuat status dari database…':'Status belum bisa dibaca dari database ('+(CK.err||'gagal')+')';
-    const withS=exp.filter(d=>days[d]);
+    const withS=days[P.ref]?[P.ref]:[]; /* movement hanya per hari (tanggal Sampai), bukan MTD */
     const navNo=withS.filter(d=>R[d]&&R[d].np_total>0&&!(R[d].nav_rows>0)), navWr=withS.filter(d=>R[d]&&R[d].nav_rows>0&&R[d].np_found<R[d].np_total);
     const navNone=withS.filter(d=>R[d]&&R[d].np_total===0&&!(R[d].nav_rows>0));
     const nvl=navWr.map(d=>ckLab(d)+' ('+(R[d].np_total-R[d].np_found)+' NP)').slice(0,8).join(', ');
     out.push({id:'nav',title:'Nota Penjualan NAV (Type MS)',file:'File: Nota Penjualan dari NAV (kolom No Nota Penjualan dan Type). Ekspor setelah jam penjualan selesai.',
       state:!ok?'warn':navNo.length?'bad':navWr.length?'warn':'ok',
-      summary:!ok?(wait?st:st):navNo.length?navNo.length+' tanggal belum ada NAV':navWr.length?navWr.length+' tanggal ada NP belum masuk NAV':'Lengkap sampai '+ckLab(P.ref),
-      lines:[!ok?st:'',navNo.length?'Belum ada NAV: '+ckDates(navNo):'',navWr.length?'NP belum ada di NAV (dianggap Bawa Langsung): '+nvl:'',ok&&!navNo.length&&!navWr.length?'Semua NP penjualan sudah ada di NAV.':'',navNone.length?'Tanpa No Nota (tidak perlu NAV): '+ckDates(navNone):'','Isi: Type MS tiap Nota Penjualan. NP yang tidak ada di NAV dihitung Bawa Langsung (wajib movement).'].filter(Boolean),tpl:null});
+      summary:!ok?(wait?st:st):navNo.length?'NAV '+ckLab(P.ref)+' belum ada':navWr.length?navWr.length+' NP '+ckLab(P.ref)+' belum ada di NAV':'Lengkap untuk '+ckLab(P.ref),
+      lines:[!ok?st:'',navNo.length?'Belum ada NAV: '+ckDates(navNo):'',navWr.length?'NP belum ada di NAV (dianggap Bawa Langsung): '+nvl:'',ok&&!navNo.length&&!navWr.length?'Semua NP penjualan '+ckLab(P.ref)+' sudah ada di NAV.':'',navNone.length?'Tanpa No Nota (tidak perlu NAV): '+ckDates(navNone):'','Dicek per hari (tanggal Sampai). Isi: Type MS tiap Nota Penjualan. NP yang tidak ada di NAV dihitung Bawa Langsung (wajib movement).'].filter(Boolean),tpl:null});
     const mvNo=withS.filter(d=>R[d]&&!(R[d].mv_items>0));
     out.push({id:'mvr',title:'Report Stock Movement',file:'File: Report Stock Movement (kolom Item No, Qty, lokasi tujuan X333)',
       state:!ok?'warn':mvNo.length?'bad':'ok',
-      summary:!ok?st:mvNo.length?mvNo.length+' tanggal belum ada Stock Movement':'Lengkap sampai '+ckLab(P.ref),
-      lines:[!ok?st:'',mvNo.length?'Belum ada: '+ckDates(mvNo):'',ok&&!mvNo.length?'Semua tanggal penjualan sudah punya data Stock Movement.':'','Isi: qty item yang dipindah ke X333. Dipakai menghitung Done / Belum di Task Order Movement.'].filter(Boolean),tpl:null});
+      summary:!ok?st:mvNo.length?'Stock Movement '+ckLab(P.ref)+' belum ada':'Lengkap untuk '+ckLab(P.ref),
+      lines:[!ok?st:'',mvNo.length?'Belum ada: '+ckDates(mvNo):'',ok&&!mvNo.length?'Stock Movement '+ckLab(P.ref)+' sudah ada.':'','Dicek per hari (tanggal Sampai), tidak perlu bulan berjalan. Isi: qty item yang dipindah ke X333. Dipakai menghitung Done / Belum di Task Order Movement.'].filter(Boolean),tpl:null});
   }
   const ms=hasS? exp.filter(d=>!sd.has(d)) : exp;
   mk('sched','Target dan daftar salesperson (admin, bulanan)','File: jadwal & target (kolom SALES ID, TARGET/DAY, lalu kolom tanggal)',ms,null,hasS? SCH.people.length+' orang, sampai '+ckLab(SCH.dates[SCH.dates.length-1]) : '',hasS? ms.length+' tanggal belum ada di jadwal' : 'Belum ada file jadwal',
