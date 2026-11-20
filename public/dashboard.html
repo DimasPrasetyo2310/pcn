@@ -395,15 +395,15 @@ body.tim header .who,body.tim #databar,body.tim .kpis,body.tim .grid2,body.tim #
   </section>
 
     <section class="card" id="sp-card">
-      <div class="hd"><div><h2>Tampilan salesperson (validasi)</h2><p class="hint">Daftar salesperson per tanggal: budget, actual, dan approval TL / MOD.</p><div id="sp-pinbtns" style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap" hidden><button class="btn sm" id="pin-chg" type="button">Ganti PIN saya</button><button class="btn sm" id="pin-adm" type="button" hidden>Atur PIN tim</button><span class="note" id="pin-note" style="color:#b4271c"></span></div></div>
-        <div class="ctl"><select id="sp-zona" aria-label="Filter zonasi"></select><details class="spms" id="sp-shiftbox"><summary id="sp-shifts" aria-label="Filter shift (boleh pilih lebih dari satu)">Semua shift</summary><div class="spml" id="sp-shiftl"></div></details><select id="sp-date" aria-label="Filter tanggal"></select><select id="sp-sel" aria-label="Pilih salesperson" hidden></select></div></div>
+      <div class="hd"><div><h2>Tampilan salesperson (validasi)</h2><p class="hint">Daftar salesperson per tanggal: budget, actual, dan approval TL / MOD.</p><div id="sp-pinbtns" data-noshot style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap" hidden><button class="btn sm" id="pin-chg" type="button">Ganti PIN saya</button><button class="btn sm" id="pin-adm" type="button" hidden>Atur PIN tim</button><span class="note" id="pin-note" style="color:#b4271c"></span></div></div>
+        <div class="ctl"><button type="button" class="btn" id="sp-shot" data-noshot title="Salin gambar HD ke clipboard, lalu tempel di WhatsApp">📷 Print screen</button><select id="sp-zona" aria-label="Filter zonasi"></select><details class="spms" id="sp-shiftbox"><summary id="sp-shifts" aria-label="Filter shift (boleh pilih lebih dari satu)">Semua shift</summary><div class="spml" id="sp-shiftl"></div></details><select id="sp-date" aria-label="Filter tanggal"></select><select id="sp-sel" aria-label="Pilih salesperson" hidden></select></div></div>
       <div id="sp-list" style="margin-bottom:14px"></div>
       <div id="sp-body" hidden></div>
     </section>
 
     <section class="card" id="mv-card" hidden>
       <div class="hd"><div><h2>Task Order Movement harian</h2><p class="hint">Item yang terjual (Sales Detail) dicocokkan dengan Stock Movement. Hijau = sudah di-movement, merah = belum. Klik kartu atau nama sales untuk melihat detail item.</p></div>
-        <div class="ctl"><select id="mv-date" aria-label="Tanggal movement"></select><button type="button" class="btn" id="mv-shot" data-noshot title="Simpan kartu ini sebagai gambar HD (PNG)">📷 Print screen</button></div></div>
+        <div class="ctl"><select id="mv-date" aria-label="Tanggal movement"></select><button type="button" class="btn" id="mv-shot" data-noshot title="Salin gambar HD ke clipboard, lalu tempel di WhatsApp">📷 Print screen</button></div></div>
       <div id="mv-body"></div>
     </section>
 
@@ -462,7 +462,7 @@ body.tim header .who,body.tim #databar,body.tim .kpis,body.tim .grid2,body.tim #
 
 <div class="ovl" id="kpop" hidden role="dialog" aria-modal="true" aria-labelledby="kpop-t">
   <div class="pop">
-    <div class="pop-hd"><div><h2 id="kpop-t"></h2><div class="per" id="kpop-per"></div></div><span class="hdb" data-noshot><button type="button" class="pop-x shotb" id="kpop-shot" title="Print screen HD (PNG)" aria-label="Print screen">📷</button><button type="button" class="pop-x" id="kpop-x" aria-label="Tutup">×</button></span></div>
+    <div class="pop-hd"><div><h2 id="kpop-t"></h2><div class="per" id="kpop-per"></div></div><span class="hdb" data-noshot><button type="button" class="pop-x shotb" id="kpop-shot" title="Salin gambar HD ke clipboard, lalu tempel di WhatsApp" aria-label="Print screen">📷</button><button type="button" class="pop-x" id="kpop-x" aria-label="Tutup">×</button></span></div>
     <div class="pinfo" id="kpop-info"></div>
     <div class="pop-body" id="kpop-body"></div>
   </div>
@@ -470,7 +470,7 @@ body.tim header .who,body.tim #databar,body.tim .kpis,body.tim .grid2,body.tim #
 
 <div class="ovl" id="pop" hidden role="dialog" aria-modal="true" aria-labelledby="pop-name">
   <div class="pop">
-    <div class="pop-hd"><div><h2 id="pop-name"></h2><div class="per" id="pop-per"></div></div><span class="hdb" data-noshot><button type="button" class="pop-x shotb" id="pop-shot" title="Print screen HD (PNG)" aria-label="Print screen">📷</button><button type="button" class="pop-x" id="pop-x" aria-label="Tutup">×</button></span></div>
+    <div class="pop-hd"><div><h2 id="pop-name"></h2><div class="per" id="pop-per"></div></div><span class="hdb" data-noshot><button type="button" class="pop-x shotb" id="pop-shot" title="Salin gambar HD ke clipboard, lalu tempel di WhatsApp" aria-label="Print screen">📷</button><button type="button" class="pop-x" id="pop-x" aria-label="Tutup">×</button></span></div>
     <div class="pinfo">
       <div><span>Sales ID</span><b id="pop-id"></b></div>
       <div><span>Nama</span><b id="pop-name2"></b></div>

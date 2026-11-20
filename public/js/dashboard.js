@@ -1096,12 +1096,13 @@ document.addEventListener('click',ev=>{ const t=ev.target.closest&&ev.target.clo
   if(!MV.data) return; if(t.dataset.mvf) mvPop(null,t.dataset.mvf); else mvPop(t.dataset.mvr,'all'); });
 document.addEventListener('keydown',ev=>{ if(ev.key!=='Enter') return; const t=ev.target.closest&&ev.target.closest('#mv-body [data-mvf], #mv-body tr[data-mvr]'); if(!t||!MV.data) return; if(t.dataset.mvf) mvPop(null,t.dataset.mvf); else mvPop(t.dataset.mvr,'all'); });
 document.addEventListener('change',ev=>{ if(ev.target&&ev.target.id==='mv-date'){ MV.d=ev.target.value; mvRender(); } });
-document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('#mv-shot,#kpop-shot,#pop-shot'); if(!b||!window.DomShot) return;
+document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.closest('#mv-shot,#kpop-shot,#pop-shot,#sp-shot'); if(!b||!window.DomShot) return;
   const dt=(MV&&MV.d)||''; let el,nm;
-  if(b.id==='mv-shot'){ el=$('mv-card'); nm='task-order-movement-harian-'+dt; }
+  if(b.id==='sp-shot'){ el=$('sp-card'); nm='validasi-salesperson'+(spDate?'-'+spDate:''); }
+  else if(b.id==='mv-shot'){ el=$('mv-card'); nm='task-order-movement-harian-'+dt; }
   else if(b.id==='kpop-shot'){ el=document.querySelector('#kpop .pop'); nm=DomShot.slug($('kpop-t').textContent)+(dt?'-'+dt:''); }
   else { el=document.querySelector('#pop .pop'); nm=DomShot.slug($('pop-name').textContent||'detail'); }
-  if(el) DomShot(el,nm+'.png',{btn:b.id==='mv-shot'?b:null}); });
+  if(el) DomShot(el,nm+'.png',{btn:(b.id==='mv-shot'||b.id==='sp-shot')?b:null}); });
 function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));

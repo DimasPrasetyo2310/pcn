@@ -29,9 +29,13 @@
     for(var j=0;j<sk.length&&j<dk.length;j++){ var r=inline(sk[j],dk[j]); if(r&&r!==dk[j]) dst.replaceChild(r,dk[j]); }
     return dst;
   }
-  window.DomShot=async function(el,name,o){
-    o=o||{}; var btn=o.btn, old=btn?btn.textContent:'', host=null;
-    if(btn){ btn.disabled=true; btn.textContent='Membuat gambar…'; }
+  var TT=null;
+  function toast(t,kind){
+    var e=document.getElementById('domshot-toast'); if(!e){ e=document.createElement('div'); e.id='domshot-toast'; e.setAttribute('role','status'); e.setAttribute('aria-live','polite'); e.style.cssText='position:fixed;left:50%;bottom:22px;transform:translateX(-50%);max-width:92vw;z-index:2147483000;padding:11px 16px;border-radius:10px;font:600 14px/1.4 system-ui,Segoe UI,Arial,sans-serif;box-shadow:0 6px 24px rgba(0,0,0,.25);text-align:center'; document.body.appendChild(e); }
+    e.textContent=t; e.style.background=kind==='warn'?'#b42318':'#12233f'; e.style.color='#fff'; e.style.display='block'; clearTimeout(TT); TT=setTimeout(function(){ e.style.display='none'; },kind==='warn'?7000:5500);
+  }
+  async function build(el,o){
+    var host=null, FRr=null;
     try{
       try{ await document.fonts.ready; }catch(e){}
       var need=el.offsetWidth; el.querySelectorAll('table').forEach(function(t){ need=Math.max(need,t.scrollWidth+44); });
@@ -49,11 +53,27 @@
       var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'"><foreignObject x="0" y="0" width="100%" height="100%">'+xml+'</foreignObject></svg>';
       var img=new Image(); await new Promise(function(ok,no){ img.onload=ok; img.onerror=function(){ no(new Error('browser tidak bisa merender gambar')); }; img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg); });
       var cv=document.createElement('canvas'); cv.width=Math.round(W*SC); cv.height=Math.round(H*SC); var cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,cv.width,cv.height); cx.imageSmoothingQuality='high'; cx.drawImage(img,0,0,cv.width,cv.height);
-      var blob=await new Promise(function(ok,no){ cv.toBlob(function(b){ b?ok(b):no(new Error('gagal membuat gambar')); },'image/png'); });
-      await save(blob,name);
-      return {w:cv.width,h:cv.height,bytes:blob.size};
-    }catch(err){ console.error(err); try{ window.alert('Print screen gagal: '+(err&&err.message||err)); }catch(e){} }
-    finally{ if(host&&host.parentNode) host.parentNode.removeChild(host); if(FR&&FR.parentNode){ FR.parentNode.removeChild(FR); FR=null; DEF={}; } if(btn){ btn.disabled=false; btn.textContent=old; } }
+      return await new Promise(function(ok,no){ cv.toBlob(function(b){ b?ok(b):no(new Error('gagal membuat gambar')); },'image/png'); });
+    } finally { if(host&&host.parentNode) host.parentNode.removeChild(host); if(FR&&FR.parentNode){ FR.parentNode.removeChild(FR); FR=null; DEF={}; } }
+  }
+  /* Default: SALIN ke clipboard (tempel di WhatsApp dengan Ctrl+V). Bila browser menolak, otomatis diunduh sebagai PNG.
+     clipboard.write dipanggil seketika saat klik (blob menyusul lewat Promise) agar izin gesture pengguna tetap berlaku. */
+  window.DomShot=async function(el,name,o){
+    o=o||{}; var btn=o.btn, old=btn?btn.textContent:'';
+    if(btn){ btn.disabled=true; btn.textContent='Membuat gambar…'; }
+    toast('Membuat gambar…');
+    var bp=build(el,o); bp.catch(function(){});
+    try{
+      var canCopy=!o.download&&navigator.clipboard&&navigator.clipboard.write&&window.ClipboardItem;
+      if(canCopy){
+        try{ await navigator.clipboard.write([new ClipboardItem({'image/png':bp})]); toast('✓ Gambar disalin. Buka WhatsApp lalu tempel (Ctrl+V; di ponsel tekan lama lalu Tempel).'); var b0=await bp; return {copied:true,bytes:b0.size}; }
+        catch(e){ if(!(e&&(e.name==='NotAllowedError'||e.name==='SecurityError'||e.name==='TypeError'||/clipboard|permission|document is not focused/i.test(e.message||'')))) throw e; }
+      }
+      var blob=await bp; await save(blob,name);
+      toast(canCopy?'Browser tidak mengizinkan menyalin, jadi gambar disimpan sebagai file PNG. Kirim file itu di WhatsApp.':'Gambar disimpan sebagai file PNG.');
+      return {copied:false,bytes:blob.size};
+    }catch(err){ console.error(err); toast('Print screen gagal: '+(err&&err.message||err),'warn'); }
+    finally{ if(btn){ btn.disabled=false; btn.textContent=old; } }
   };
   window.DomShot.slug=function(s){ return String(s||'gambar').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60)||'gambar'; };
 })();
