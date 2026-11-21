@@ -193,6 +193,13 @@ function renderApprover(){
     else btn='<button class="btn" data-ap="1" data-k="'+k+'">Approve '+k.toUpperCase()+'</button>';
     return '<div class="'+(ok?'apok':'apno')+'"><small>Approval '+(k==='tl'?'TL':'MOD')+'</small><b>'+st+'</b>'+hint+btn+'</div>'; };
   $('ap-grid').innerHTML=col('tl')+col('mod');
+  { // berapa kali validasi (TL/MOD) tidak lengkap, hari berjalan tidak dihitung
+    const have=new Set((RD.sales||[]).map(y=>y.d)), miss=[];
+    (RD.dates||[]).forEach((x,i)=>{ if(x>=d||!have.has(x)||!isWork(RD.p.c?RD.p.c[i]:'')) return; const a=(RD.appr||[]).find(y=>y.d===x)||{}, pc=dayPct(x), t=!!a.tl, m=!!a.mod||(t&&pc!=null&&pc>=AUTO_MOD); if(!t||!m) miss.push(x); });
+    const sdt=x=>(+x.slice(8))+' '+MON[+x.slice(5,7)-1];
+    $('ap-miss').innerHTML=miss.length?'<div style="border:1.5px solid #e8b4af;background:#fdeae8;color:#b4271c;border-radius:10px;padding:10px 12px"><b>Validasi tidak lengkap: '+miss.length+' kali bulan ini</b><div class="note" style="margin-top:4px;color:#7a2b25">'+miss.map(sdt).join(', ')+'</div></div>'
+      :'<div style="border:1.5px solid #b7dcc9;background:#e4f4ec;color:#0e6b49;border-radius:10px;padding:10px 12px"><b>✓ Validasi selalu lengkap bulan ini</b></div>';
+  }
   card.hidden=false;
 }
 function apErr(r){ const m={nopin:'PIN akun ini belum diatur. Minta admin mengatur PIN.',locked:'Terlalu banyak salah. Akun ini terkunci, coba lagi dalam '+(r.wait||5)+' menit.',bad:'PIN salah. Sisa percobaan: '+r.left+'.',role_tl:'Nama ini bukan Team Leader.',role_mod:'Nama ini bukan Manager (MOD).',need_tl:'Approval TL harus dilakukan lebih dulu.',mod_first:'Batalkan Approval MOD lebih dulu.',not_owner:'Approval hanya bisa dibatalkan oleh orang yang menyetujuinya.',format:'PIN harus 6 digit angka.',code:'Kode salesperson tidak dikenali.',key:'Link tidak valid.',nouser:'Nama tidak ditemukan.'}; return m[r.err]||'Gagal ('+(r.err||'error')+').'; }
