@@ -59,3 +59,9 @@ Halaman `followup.html` (`js/followup.js`) memakai login yang sama. Tabel: `fu_c
 - Template pesan WhatsApp disimpan di tabel `fu_templates` (lihat `supabase/followup_templates.sql`); mendukung kode {salam} {nama} {sales} {member} {toko} dan variasi kata {a|b|c}.
 - Kolom `member_no` (No Member) dipakai untuk mencegah data dobel saat impor.
 - Data customer (no. HP) hanya ada di Supabase, tidak disimpan di repo.
+
+## Pemeriksaan otomatis
+
+- `node tests/undef.js public` memeriksa sintaks dan identifier yang tidak dikenal.
+- `node tests/smoke.js` memuat semua halaman di Chromium dengan Supabase palsu dan gagal bila ada error JS.
+- Workflow `Pemeriksaan kesehatan dashboard` menjalankan keduanya di setiap push, PR, dan setiap hari.

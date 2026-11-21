@@ -1,0 +1,31 @@
+name: Pemeriksaan kesehatan dashboard
+
+# Menjalankan pemeriksaan sintaks/identifier dan smoke test browser untuk semua halaman.
+# Berjalan di setiap push dan pull request, serta setiap hari agar kerusakan dari luar (misalnya CDN) cepat terlihat.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Pasang alat uji
+        run: |
+          npm install --no-save --no-package-lock acorn@8 acorn-walk@8 playwright@1
+          npx playwright install --with-deps chromium
+      - name: Pemeriksa sintaks dan identifier
+        run: node tests/undef.js public
+      - name: Smoke test semua halaman
+        run: node tests/smoke.js
