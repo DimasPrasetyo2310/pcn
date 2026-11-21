@@ -1410,7 +1410,6 @@ $('logout').addEventListener('click',signOut);$('boot-out').addEventListener('cl
     bootMsg('Gagal memuat data: '+((err&&err.message)||err),true);
   }
 })();
-})();
 
 /* Tampilan layar penuh untuk tabel Target vs actual */
 function tgFull(on){
@@ -1421,3 +1420,4 @@ function tgFull(on){
   if(x) c.scrollTop=0;
 }
 if($('tgFull')){$('tgFull').addEventListener('click',()=>tgFull());document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('tgCard').classList.contains('tgfull'))tgFull(false)})}
+})();
