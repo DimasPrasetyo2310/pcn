@@ -955,8 +955,9 @@ async function kcSalper(days){
   const p=(async()=>{
     if(!SB) return null;
     if(!KCSCH){const {data}=await SB.from('dashboard_schedule').select('doc').eq('store_code',STORE).maybeSingle();KCSCH=data&&data.doc||{}}
-    const need=days.filter(d=>!KCDOCS.has(d));
-    if(need.length){const {data}=await SB.from('dashboard_days').select('sale_date,doc').eq('store_code',STORE).in('sale_date',need);(data||[]).forEach(r=>KCDOCS.set(r.sale_date,r.doc))}
+    const {data:ps,error:pe}=await SB.rpc('person_sales',{p_store:STORE,p_days:days});
+    if(pe) throw pe;
+    const SPS=new Map((ps||[]).map(r=>[r.id,+r.sales||0]));
     const sch=KCSCH; if(!sch||!Array.isArray(sch.people)||!Array.isArray(sch.dates)) return null;
     let n=0,hi=0; const list=[];
     sch.people.forEach(e=>{
@@ -965,7 +966,7 @@ async function kcSalper(days){
       let t=0,cov=0,sl=0;
       days.forEach(d=>{const i=sch.dates.indexOf(d);if(i<0)return;cov++;if(kcWork((e.c||[])[i]))t+=tpe});
       if(!cov||!(t>0)) return;
-      days.forEach(d=>{const doc=KCDOCS.get(d),pp=doc&&Array.isArray(doc.people)?doc.people.find(x=>x.id===e.id):null;if(pp)sl+=+pp.sales||0});
+      sl=SPS.get(e.id)||0;
       n++; if(sl>=t) hi++;
       list.push({name:e.name||e.id,zona:e.zona||'',cat:e.cat||'',t,sl,ach:sl/t});
     });
