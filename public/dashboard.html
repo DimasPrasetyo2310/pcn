@@ -260,7 +260,7 @@ table.spvtb td.spok{color:#0e6b49;font-weight:600;background:#eaf7f0;white-space
 .spv .spsum>div[data-mvf]{cursor:pointer;transition:box-shadow .15s,transform .15s}.spv .spsum>div[data-mvf]:hover,.spv .spsum>div[data-mvf]:focus-visible{box-shadow:0 2px 10px rgba(0,0,0,.14);transform:translateY(-1px);outline:none}
 table.mvtb{width:100%;border-collapse:collapse;font-size:14px}table.mvtb th{position:sticky;top:0;text-align:left;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#fff;font-weight:700;padding:8px 10px;background:var(--navy);border-bottom:3px solid var(--amber)}table.mvtb th.rt,table.mvtb td.rt{text-align:right}table.mvtb td{padding:8px 10px;border-bottom:1px solid var(--grid)}table.mvtb td small{display:block;font-weight:400;font-size:11px;opacity:.85}
 table.mvtb td:nth-child(1),table.mvtb td:nth-child(2){text-align:left}table.mvtb td.rt{white-space:nowrap}
-table.mvtb tr[data-mvr]{cursor:pointer}table.mvtb tr[data-mvr]:hover td{filter:brightness(.97)}table.mvtb td.mvok{background:#eaf7f0;color:#0e6b49;font-weight:700}table.mvtb td.mvno{background:#fdeceb;color:#b4271c;font-weight:700}table.mvtb tr.tot td{background:#f4f6fb}
+table.mvtb tr[data-mvr],table.mvtb tr[data-mvz],table.mvtb tr[data-mvsp]{cursor:pointer}table.mvtb tr[data-mvr]:hover td,table.mvtb tr[data-mvz]:hover td,table.mvtb tr[data-mvsp]:hover td{filter:brightness(.97)}table.mvtb.mvz td:nth-child(2){text-align:right}table.mvtb.mvz th{white-space:normal;line-height:1.25;vertical-align:bottom}table.mvtb.mvz td{padding-left:8px;padding-right:8px}table.mvtb.mvz td.mvok,table.mvtb.mvz td.mvno{font-weight:700}table.mvtb td.mvok{background:#eaf7f0;color:#0e6b49;font-weight:700}table.mvtb td.mvno{background:#fdeceb;color:#b4271c;font-weight:700}table.mvtb tr.tot td{background:#f4f6fb}
 table.spvtb td.mvwarn{background:#fff4d6;color:#6b4a00;font-weight:600}
 
 
@@ -402,7 +402,7 @@ body.tim header .who,body.tim #databar,body.tim .kpis,body.tim .grid2,body.tim #
     </section>
 
     <section class="card" id="mv-card" hidden>
-      <div class="hd"><div><h2>Task Order Movement harian</h2><p class="hint">Item yang terjual (Sales Detail) dicocokkan dengan Stock Movement. Hijau = sudah di-movement, merah = belum. Klik kartu atau nama sales untuk melihat detail item.</p></div>
+      <div class="hd"><div><h2>Task Order Movement harian</h2><p class="hint">Item yang terjual (Sales Detail) dicocokkan dengan Stock Movement. Hijau = sudah di-movement, merah = belum. Klik kartu atau baris zonasi untuk melihat detail salesperson dan item.</p></div>
         <div class="ctl"><select id="mv-date" aria-label="Tanggal movement"></select><button type="button" class="btn" id="mv-shot" data-noshot title="Salin gambar HD ke clipboard, lalu tempel di WhatsApp">📷 Print screen</button></div></div>
       <div id="mv-body"></div>
     </section>
