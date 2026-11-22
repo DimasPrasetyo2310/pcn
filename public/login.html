@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Masuk Dashboard Salesperson</title>
   <style>
     *{box-sizing:border-box}
@@ -19,7 +19,8 @@
     .card{border-top:6px solid #f5a800}
     button:disabled{opacity:.6;cursor:progress}
     #form-error{margin-top:14px;padding:10px 12px;border-radius:8px;background:#fdeae8;color:#b4271c;font-size:13.5px}
-  </style>
+  @media (max-width:700px){input,select,textarea{font-size:16px!important}html{-webkit-text-size-adjust:100%}}
+</style>
 </head>
 <body>
   <main class="card">
