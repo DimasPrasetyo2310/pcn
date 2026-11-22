@@ -15,6 +15,7 @@ const pad=n=>String(n).padStart(2,'0');
 const MON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const fd=iso=>{const p=iso.split('-');return (+p[2])+' '+MON[+p[1]-1]};
 const fdy=iso=>fd(iso)+' '+iso.slice(0,4);
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const addDays=(iso,n)=>new Date(Date.parse(iso+'T00:00:00Z')+n*864e5).toISOString().slice(0,10);
 const title=s=>s.toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
 
@@ -214,7 +215,9 @@ function render(){
   document.querySelectorAll('.chip').forEach(c=>{const r=presetRange(c.dataset.p);c.setAttribute('aria-pressed',String(r[0]===from&&r[1]===to))});
   const ds=allDates();
   if(ds.length){$('from').min=$('to').min=$('tgFrom').min=$('tgTo').min=ds[0];$('from').max=$('to').max=$('tgFrom').max=$('tgTo').max=ds[ds.length-1]}
-  $('tgFrom').value=tgR.from||from;$('tgTo').value=tgR.to||to;$('tgSync').hidden=!(tgR.from||tgR.to);
+  {const td=todayISO();if(td>$('tgTo').max)$('tgFrom').max=$('tgTo').max=td}
+  $('tgFrom').value=tgR.from||from;$('tgTo').value=tgR.to||to;
+  $('tgToday').setAttribute('aria-pressed',String($('tgFrom').value===todayISO()&&$('tgTo').value===todayISO()));$('tgSync').hidden=!(tgR.from||tgR.to);
   renderTarget(tgRows(rows));
   if(!rows.length){
     $('period').textContent='Tidak ada data pada rentang ini';
@@ -567,6 +570,7 @@ async function doUpload(files){
 /* ---------- Filter tanggal ---------- */
 $('from').addEventListener('change',e=>{let a=e.target.value,b=$('to').value;if(!a)return;if(b&&a>b)b=a;setRange(a,b)});
 $('to').addEventListener('change',e=>{let b=e.target.value,a=$('from').value;if(!b)return;if(a&&b<a)a=b;setRange(a,b)});
+$('tgToday').addEventListener('click',()=>{const td=todayISO();tgR.from=tgR.to=td;render()});
 $('tgFrom').addEventListener('change',e=>{tgR.from=e.target.value||null;if(!tgR.to)tgR.to=$('tgTo').value||null;render()});
 $('tgTo').addEventListener('change',e=>{tgR.to=e.target.value||null;if(!tgR.from)tgR.from=$('tgFrom').value||null;render()});
 $('tgSync').addEventListener('click',()=>{tgR={from:null,to:null};render()});
