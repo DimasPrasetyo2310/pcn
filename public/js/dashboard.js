@@ -1779,8 +1779,14 @@ async function boot(){
   await loadAll();
   const ch=SB.channel('dashboard-data');
   ['dashboard_days','dashboard_schedule'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},reloadSoon));
+  /* approval TL/MOD dan Stock Movement/NAV: tampil langsung di semua perangkat (push) + ikut siklus 60 detik */
+  const mvRefresh=()=>{ if(typeof mvReady!=='undefined'&&mvReady&&!MV.busy&&MV.d&&MV.key&&$('mv-card')&&!$('mv-card').hidden) mvLoad(MV.key); try{ CK.rows=null; CK.fail=''; if(typeof renderChecklist==='function') renderChecklist(); }catch(e){} };
+  const apRefresh=()=>{ spApprDT=0; if(typeof spApprT==='object') Object.keys(spApprT).forEach(k=>{ spApprT[k]=0; }); spLoadApprDate().then(()=>{ try{ if(SPPOP&&!$('kpop').hidden) spValShow(SPPOP.d,SPPOP.f,SPPOP.so,false,SPPOP.z); }catch(e){} }); };
+  let rtT1=0, rtT2=0;
+  ch.on('postgres_changes',{event:'*',schema:'public',table:'sp_approvals'},()=>{ clearTimeout(rtT1); rtT1=setTimeout(apRefresh,400); });
+  ['mv_moves','mv_nav'].forEach(t=>ch.on('postgres_changes',{event:'*',schema:'public',table:t},()=>{ clearTimeout(rtT2); rtT2=setTimeout(mvRefresh,1200); }));
   ch.subscribe();
-  const refresh=()=>{ if(!busy && !document.hidden) loadAll(); };
+  const refresh=()=>{ if(!busy && !document.hidden){ loadAll(); mvRefresh(); apRefresh(); } };
   setInterval(refresh,60000);
   document.addEventListener('visibilitychange',refresh);
   addEventListener('focus',refresh);
