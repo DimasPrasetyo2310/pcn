@@ -229,8 +229,9 @@ async function mvLoad(force){
 }
 // ---- Suggest Location (dari Nota Penjualan): W*/OV* = Gudang, C*/D* + angka = Area Selling, kosong = Tidak input Lokasi, lainnya apa adanya ----
 const locKind=t=>{ t=String(t==null?'':t).trim(); return !t?'nil':/^(w\d|ov)/i.test(t)?'wh':/^[cd]\d/i.test(t)?'sel':'oth'; };
+const locTyp=t=>/^(bawa langsung|cash&carry via pickup & delivery|cash&carry via gudang store)$/i.test(String(t||'').replace(/\s+/g,' ').trim());
 function locChips(l,hasLoc){
-  if(!hasLoc) return '';
+  if(!hasLoc||!locTyp(l[5])) return '';
   const ls=(Array.isArray(l[9])&&l[9].length)?l[9]:[['',Number(l[10]||l[4])]], multi=ls.length>1;
   return '<div class="chips">'+ls.map(x=>{ const t=String(x[0]||'').trim(), k=locKind(t), lab=k==='nil'?'Tidak input Lokasi':k==='wh'?'Gudang':k==='sel'?'Area Selling':t;
     return '<span class="chip '+k+'"><b>'+esc(lab)+'</b>'+((k==='wh'||k==='sel')?'<span>'+esc(t.toUpperCase())+'</span>':'')+(multi?'<span>· '+mvq(x[1])+' qty</span>':'')+'</span>'; }).join('')+'</div>';
