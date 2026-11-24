@@ -1109,9 +1109,20 @@ async function ckLoad(){
 }
 function ckRefresh(){ CK.rows=null; CK.fail=''; ckLoad(); }
 function mvPop(who,f,zone){ MVP={who,f,zone:zone==null?null:zone}; mvPopDraw(true); }
+// Suggest Location: W*/OV* = Gudang (auto), C*/D* + angka = Area Selling, kosong = Tidak input Lokasi, lainnya apa adanya.
+// Hanya ditampilkan untuk tipe wajib movement (C&C PND / C&C Gudang Store / Bawa Langsung).
+const locKind=t=>{ t=String(t==null?'':t).trim(); return !t?'nil':/^(w\d|ov)/i.test(t)?'wh':/^[cd]\d/i.test(t)?'sel':'oth'; };
+const locTyp=t=>/^(bawa langsung|cash&carry via pickup & delivery|cash&carry via gudang store)$/i.test(String(t||'').replace(/\s+/g,' ').trim());
+function locChips(l){
+  if(!locTyp(l[6])) return '';
+  const ls=(Array.isArray(l[10])&&l[10].length)?l[10]:[['',Number(l[11]||l[5])]], multi=ls.length>1;
+  return ls.map(x=>{ const t=String(x[0]||'').trim(), k=locKind(t), lab=k==='nil'?'Tidak input Lokasi':k==='wh'?'Gudang':k==='sel'?'Area Selling':t;
+    return '<span class="lchip '+k+'"><b>'+esc(lab)+'</b>'+((k==='wh'||k==='sel')?' '+esc(t.toUpperCase()):'')+(multi?' · '+mvQ(x[1])+' qty':'')+'</span>'; }).join(' ');
+}
 function mvPopDraw(open){
   if(!MV.data||!MVP) return; const d=MV.d, ZN=MVP.zone, ZV=ZN!==null&&MVP.who===null, all=(MV.data.lines||[]).filter(l=>MVP.who!==null?l[0]===MVP.who:(ZN===null||mvZone(l[0])===ZN)), S=mvStat(all);
   const flt={all:()=>true,task:l=>l[7],belum:l=>l[7]&&(l[9]||0)<l[5],done:l=>l[7]&&(l[9]||0)>=l[5],auto:l=>!l[7]}, f=(ZV&&MVP.f==='sp')?'sp':(flt[MVP.f]?MVP.f:'all');
+  const hasLoc=all.some(l=>Array.isArray(l[10])&&l[10].length);
   const cnt=k=>k==='sp'?spn:all.filter(flt[k]).length, sh=f==='sp'?[]:all.filter(flt[f]);
   sh.sort((a,b)=>(((b[7]&&(b[9]||0)<b[5])?1:0)-((a[7]&&(a[9]||0)<a[5])?1:0))||String(a[1]).localeCompare(String(b[1])));
   const ttl=MVP.who!==null?mvName(d,MVP.who)+(ZN!==null?' · '+ZN:''):ZN!==null?'Zonasi '+ZN:'Task Order Movement · semua salesperson';
@@ -1125,7 +1136,7 @@ function mvPopDraw(open){
   const stc=l=>{ const q=l[5], a=l[9]||0; if(!l[7]) return l[8]?'<td class="spok">✓ Auto<small>'+esc(l[5]>0?l[6]:'')+'</small></td>':'<td class="mvwarn">? Type belum diketahui<small>NP tidak ada di NAV</small></td>'; return a>=q?'<td class="spok">✓ Done<small>'+mvQ(a)+' / '+mvQ(q)+'</small></td>':'<td class="spno">✕ '+(a>0?'Sebagian':'Belum')+'<small>'+mvQ(a)+' / '+mvQ(q)+'</small></td>'; };
   const spBody=()=>{ const R=Object.keys(spg).filter(Boolean).map(id=>{ const st=mvStat(spg[id]); return {id,name:mvName(d,id),st,ok:st.dn===st.tn}; }).sort((a,b)=>(a.ok-b.ok)||String(a.name).localeCompare(String(b.name),'id')); if(!R.length) return '<p class="note" style="padding:14px 4px">Tidak ada salesperson pada zonasi ini.</p>';
     return '<table class="pt spvtb mvtb"><thead><tr><th>Sales ID</th><th>Nama sales</th><th class="rt">Item terjual</th><th class="rt">Tersedia di X333 (qty)</th><th>Movement</th></tr></thead><tbody>'+R.map(r=>'<tr data-mvsp="'+esc(r.id)+'" tabindex="0" style="cursor:pointer" title="Klik untuk melihat detail item"><td class="num">'+esc(mvShort(r.id))+'</td><td><b>'+esc(r.name)+'</b></td><td class="num rt">'+r.st.n+' <small>'+mvQ(r.st.q)+' qty</small></td><td class="num rt">'+(r.st.tn?mvQ(r.st.dq)+' / '+mvQ(r.st.tq):'–')+'</td><td class="'+(r.ok?'mvok':'mvno')+'">'+(r.st.tn===0?'✓ Done <small>tidak ada task (auto)</small>':r.ok?'✓ Done <small>'+r.st.dn+'/'+r.st.tn+' task</small>':'✕ Belum <small>'+r.st.dn+'/'+r.st.tn+' task · sisa '+mvQ(r.st.tq-r.st.dq)+' qty</small>')+'</td></tr>').join('')+'</tbody></table>'; };
-  const body=f==='sp'?spBody():sh.length?'<table class="pt spvtb"><thead><tr>'+(MVP.who===null?'<th>Salesperson</th>':'')+'<th>Item No</th><th>Description</th><th>No Nota</th><th>Type</th><th class="rt">Qty jual</th><th class="rt">Tersedia di X333</th><th>Status movement</th></tr></thead><tbody>'+sh.map(l=>'<tr>'+(MVP.who===null?'<td>'+esc(mvName(d,l[0]))+'</td>':'')+'<td class="num">'+esc(l[1])+'</td><td>'+esc(l[2])+'</td><td class="num">'+esc(l[3]||'–')+'</td><td>'+esc(l[6])+'</td><td class="num rt">'+mvQ(l[5])+'</td><td class="num rt">'+(l[7]?mvQ(Math.min(l[5],l[9]||0)):'–')+'</td>'+stc(l)+'</tr>').join('')+'</tbody></table>':'<p class="note" style="padding:14px 4px">Tidak ada item pada filter ini.</p>';
+  const body=f==='sp'?spBody():sh.length?'<table class="pt spvtb"><thead><tr>'+(MVP.who===null?'<th>Salesperson</th>':'')+'<th>Item No</th><th>Description</th><th>No Nota</th><th>Type</th>'+(hasLoc?'<th>Suggest Location</th>':'')+'<th class="rt">Qty jual</th><th class="rt">Tersedia di X333</th><th>Status movement</th></tr></thead><tbody>'+sh.map(l=>'<tr>'+(MVP.who===null?'<td>'+esc(mvName(d,l[0]))+'</td>':'')+'<td class="num">'+esc(l[1])+'</td><td>'+esc(l[2])+'</td><td class="num">'+esc(l[3]||'–')+'</td><td>'+esc(l[6])+'</td>'+(hasLoc?'<td>'+locChips(l)+'</td>':'')+'<td class="num rt">'+mvQ(l[5])+'</td><td class="num rt">'+(l[7]?mvQ(Math.min(l[5],l[9]||0)):'–')+'</td>'+stc(l)+'</tr>').join('')+'</tbody></table>':'<p class="note" style="padding:14px 4px">Tidak ada item pada filter ini.</p>';
   $('kpop-body').innerHTML=ctl+body; if(open) $('kpop-body').scrollTop=0;
 }
 document.addEventListener('click',ev=>{ const t=ev.target.closest&&ev.target.closest('#mv-body [data-mvf], #mv-body tr[data-mvz], #kpop-body [data-mvt], #kpop-body tr[data-mvsp]'); if(!t) return;
