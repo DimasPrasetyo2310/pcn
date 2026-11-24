@@ -227,12 +227,21 @@ async function mvLoad(force){
   try{ const {data}=await SB.rpc('sp_mv_view',{p_key:KEY,p_code:CODE}); if(data&&data.ok){ MVD=data.days||[]; } }catch(e){}
   mvBusy=false; mvRender();
 }
+// ---- Suggest Location (dari Nota Penjualan): W*/OV* = Gudang, C*/D* + angka = Area Selling, kosong = Tidak input Lokasi, lainnya apa adanya ----
+const locKind=t=>{ t=String(t==null?'':t).trim(); return !t?'nil':/^(w\d|ov)/i.test(t)?'wh':/^[cd]\d/i.test(t)?'sel':'oth'; };
+function locChips(l,hasLoc){
+  if(!hasLoc) return '';
+  const ls=(Array.isArray(l[9])&&l[9].length)?l[9]:[['',Number(l[10]||l[4])]], multi=ls.length>1;
+  return '<div class="chips">'+ls.map(x=>{ const t=String(x[0]||'').trim(), k=locKind(t), lab=k==='nil'?'Tidak input Lokasi':k==='wh'?'Gudang':k==='sel'?'Area Selling':t;
+    return '<span class="chip '+k+'"><b>'+esc(lab)+'</b>'+((k==='wh'||k==='sel')?'<span>'+esc(t.toUpperCase())+'</span>':'')+(multi?'<span>· '+mvq(x[1])+' qty</span>':'')+'</span>'; }).join('')+'</div>';
+}
 function mvRender(){
   const card=$('mv-card'); if(!card) return;
   if(!MVD||!MVD.length){ card.hidden=true; return; }
   const today=apDay(); const ds=MVD.map(x=>x.d);
   if(!MVSEL||!ds.includes(MVSEL)) MVSEL=ds.includes(today)?today:ds[ds.length-1];
   const day=MVD.find(x=>x.d===MVSEL)||MVD[0], L=day.l||[];
+  const hasLoc=L.some(l=>Array.isArray(l[9])&&l[9].length);
   const tasks=L.filter(l=>l[6]), done=tasks.filter(l=>(Number(l[8])||0)>=Number(l[4])), belum=tasks.length-done.length, auto=L.length-tasks.length;
   const flt={all:()=>true,belum:l=>l[6]&&(Number(l[8])||0)<Number(l[4]),done:l=>l[6]&&(Number(l[8])||0)>=Number(l[4]),auto:l=>!l[6]};
   const f=flt[MVF]?MVF:'all', cnt=k=>L.filter(flt[k]).length;
@@ -241,9 +250,9 @@ function mvRender(){
     :'<div class="mvbar no">✕ Belum selesai · '+belum+' task order belum di-movement<small>'+done.length+' dari '+tasks.length+' sudah di-movement'+(day.moves_n?'':' · report Stock Movement tanggal ini belum diupload')+'</small></div>';
   const rows=L.slice().sort((a,b)=>{ const ra=a[6]?((Number(a[8])||0)<Number(a[4])?0:1):2, rb=b[6]?((Number(b[8])||0)<Number(b[4])?0:1):2; return ra-rb||String(a[1]).localeCompare(String(b[1])); }).filter(flt[f]).map(l=>{
     const q=Number(l[4]), a=Number(l[8])||0; let cl,st;
-    if(!l[6]){ if(l[7]){ cl='ok'; st='✓ Auto'; } else { cl='wr'; st='? Type belum diketahui'; } }
+    if(!l[6]){ if(l[7]){ cl='ok'; st=(Array.isArray(l[9])&&l[9].some(x=>locKind(x[0])==='wh')?'✓ Auto (Gudang)':'✓ Auto'); } else { cl='wr'; st='? Type belum diketahui'; } }
     else if(a>=q){ cl='ok'; st='✓ Done'; } else { cl='no'; st=(a>0?'✕ Sebagian':'✕ Belum'); }
-    return '<div class="mvrow '+cl+'"><div><b>'+esc(l[1])+'</b><small>'+esc(l[0])+' · '+esc(l[2]||'Tanpa No Nota')+'</small><small>'+esc(l[5])+'</small></div><div class="q">'+mvq(q)+' qty<small>'+(l[6]?'Tersedia di X333: '+mvq(Math.min(a,q))+' / '+mvq(q)+' · ':'')+st+'</small></div></div>'; }).join('')||'<p class="note">Tidak ada item pada filter ini.</p>';
+    return '<div class="mvrow '+cl+'"><div><b>'+esc(l[1])+'</b><small>'+esc(l[0])+' · '+esc(l[2]||'Tanpa No Nota')+'</small><small>'+esc(l[5])+'</small>'+locChips(l,hasLoc)+'</div><div class="q">'+mvq(q)+' qty<small>'+(l[6]?'Tersedia di X333: '+mvq(Math.min(a,q))+' / '+mvq(q)+' · ':'')+st+'</small></div></div>'; }).join('')||'<p class="note">Tidak ada item pada filter ini.</p>';
   const tabs=[['all','Semua'],['belum','Belum'],['done','Sudah'],['auto','Auto']];
   $('mv-inner').innerHTML='<div class="mvhd"><label class="note">Tanggal <select id="mv-d">'+MVD.slice().reverse().map(x=>'<option value="'+x.d+'"'+(x.d===MVSEL?' selected':'')+'>'+esc(fd(x.d))+(x.d===today?' (hari ini)':'')+'</option>').join('')+'</select></label></div>'+bar+
     '<div class="mvsum"><div><small>Item terjual</small><b>'+L.length+'</b></div><div><small>Task order</small><b>'+tasks.length+'</b></div><div><small>Sudah movement</small><b>'+done.length+'</b></div><div><small>Belum movement</small><b>'+belum+'</b></div></div>'+

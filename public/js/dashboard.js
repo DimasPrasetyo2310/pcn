@@ -255,13 +255,17 @@ function parseNav(XLSX, buf){
   for(let i=0;i<Math.min(rows.length,30);i++){ const n=rows[i].map(norm); if((n.includes('np no.')||n.includes('np no'))&&n.includes('type')){ hi=i; break; } }
   if(hi<0) throw new Error('bukan file Nota Penjualan NAV (butuh kolom "NP No." dan "Type")');
   const h=rows[hi].map(norm), cn=h.findIndex(x=>x==='np no.'||x==='np no'), ct=h.indexOf('type'), cd=h.indexOf('order date');
-  const seen={}, out=[];
+  const ci=h.findIndex(x=>x==='item no'||x==='item no.'||x==='item number'), cq=h.findIndex(x=>x==='quantity'||x==='qty'), cl=h.findIndex(x=>x==='suggest location'), cs=h.findIndex(x=>x==='salesperson code'||x==='sales person code');
+  const seen={}, out=[], locs={};
   for(let i=hi+1;i<rows.length;i++){ const r=rows[i], np=String(r[cn]==null?'':r[cn]).trim(); if(!np) continue;
-    seen[np]={np, type:String(r[ct]==null?'':r[ct]).replace(/\s+/g,' ').trim(), date:cd>=0?isoDate(r[cd]):''}; }
+    seen[np]={np, type:String(r[ct]==null?'':r[ct]).replace(/\s+/g,' ').trim(), date:cd>=0?isoDate(r[cd]):''};
+    if(ci>=0&&cl>=0){ const it=String(r[ci]==null?'':r[ci]).trim(); if(!it) continue;
+      const lc=String(r[cl]==null?'':r[cl]).replace(/\s+/g,' ').trim(), q=cq>=0?(parseFloat(String(r[cq]).replace(/,/g,''))||0):0, sc=cs>=0?String(r[cs]==null?'':r[cs]).trim():'';
+      const k=np+'|'+it+'|'+lc+'|'+sc; if(locs[k]) locs[k].qty+=q; else locs[k]={np,item:it.padStart(10,'0'),loc:lc,qty:q,sales:sc}; } }
   Object.keys(seen).forEach(k=>out.push(seen[k]));
   if(!out.length) throw new Error('tidak ada baris nota pada file NAV');
   storeGuard(out.map(x=>{ const m=/^MS(\d{5})\d/.exec(x.np); return m?m[1]:''; }));
-  return {nav:out};
+  return {nav:out, locs:Object.values(locs), hasLoc:ci>=0&&cl>=0};
 }
 function parseMoves(XLSX, buf){
   const rows = readRows(XLSX, buf); let hi=-1;
@@ -1105,9 +1109,18 @@ async function ckLoad(){
 }
 function ckRefresh(){ CK.rows=null; CK.fail=''; ckLoad(); }
 function mvPop(who,f,zone){ MVP={who,f,zone:zone==null?null:zone}; mvPopDraw(true); }
+// Suggest Location: W*/OV* = Gudang (auto), C*/D* + angka = Area Selling, kosong = Tidak input Lokasi, lainnya apa adanya
+const locKind=t=>{ t=String(t==null?'':t).trim(); return !t?'nil':/^(w\d|ov)/i.test(t)?'wh':/^[cd]\d/i.test(t)?'sel':'oth'; };
+function locChips(l,hasLoc){
+  if(!hasLoc) return '';
+  const ls=(Array.isArray(l[10])&&l[10].length)?l[10]:[['',Number(l[11]||l[5])]], multi=ls.length>1;
+  return ls.map(x=>{ const t=String(x[0]||'').trim(), k=locKind(t), lab=k==='nil'?'Tidak input Lokasi':k==='wh'?'Gudang':k==='sel'?'Area Selling':t;
+    return '<span class="lchip '+k+'"><b>'+esc(lab)+'</b>'+((k==='wh'||k==='sel')?' '+esc(t.toUpperCase()):'')+(multi?' · '+mvQ(x[1])+' qty':'')+'</span>'; }).join(' ');
+}
 function mvPopDraw(open){
   if(!MV.data||!MVP) return; const d=MV.d, ZN=MVP.zone, ZV=ZN!==null&&MVP.who===null, all=(MV.data.lines||[]).filter(l=>MVP.who!==null?l[0]===MVP.who:(ZN===null||mvZone(l[0])===ZN)), S=mvStat(all);
   const flt={all:()=>true,task:l=>l[7],belum:l=>l[7]&&(l[9]||0)<l[5],done:l=>l[7]&&(l[9]||0)>=l[5],auto:l=>!l[7]}, f=(ZV&&MVP.f==='sp')?'sp':(flt[MVP.f]?MVP.f:'all');
+  const hasLoc=all.some(l=>Array.isArray(l[10])&&l[10].length);
   const cnt=k=>k==='sp'?spn:all.filter(flt[k]).length, sh=f==='sp'?[]:all.filter(flt[f]);
   sh.sort((a,b)=>(((b[7]&&(b[9]||0)<b[5])?1:0)-((a[7]&&(a[9]||0)<a[5])?1:0))||String(a[1]).localeCompare(String(b[1])));
   const ttl=MVP.who!==null?mvName(d,MVP.who)+(ZN!==null?' · '+ZN:''):ZN!==null?'Zonasi '+ZN:'Task Order Movement · semua salesperson';
@@ -1121,7 +1134,7 @@ function mvPopDraw(open){
   const stc=l=>{ const q=l[5], a=l[9]||0; if(!l[7]) return l[8]?'<td class="spok">✓ Auto<small>'+esc(l[5]>0?l[6]:'')+'</small></td>':'<td class="mvwarn">? Type belum diketahui<small>NP tidak ada di NAV</small></td>'; return a>=q?'<td class="spok">✓ Done<small>'+mvQ(a)+' / '+mvQ(q)+'</small></td>':'<td class="spno">✕ '+(a>0?'Sebagian':'Belum')+'<small>'+mvQ(a)+' / '+mvQ(q)+'</small></td>'; };
   const spBody=()=>{ const R=Object.keys(spg).filter(Boolean).map(id=>{ const st=mvStat(spg[id]); return {id,name:mvName(d,id),st,ok:st.dn===st.tn}; }).sort((a,b)=>(a.ok-b.ok)||String(a.name).localeCompare(String(b.name),'id')); if(!R.length) return '<p class="note" style="padding:14px 4px">Tidak ada salesperson pada zonasi ini.</p>';
     return '<table class="pt spvtb mvtb"><thead><tr><th>Sales ID</th><th>Nama sales</th><th class="rt">Item terjual</th><th class="rt">Tersedia di X333 (qty)</th><th>Movement</th></tr></thead><tbody>'+R.map(r=>'<tr data-mvsp="'+esc(r.id)+'" tabindex="0" style="cursor:pointer" title="Klik untuk melihat detail item"><td class="num">'+esc(mvShort(r.id))+'</td><td><b>'+esc(r.name)+'</b></td><td class="num rt">'+r.st.n+' <small>'+mvQ(r.st.q)+' qty</small></td><td class="num rt">'+(r.st.tn?mvQ(r.st.dq)+' / '+mvQ(r.st.tq):'–')+'</td><td class="'+(r.ok?'mvok':'mvno')+'">'+(r.st.tn===0?'✓ Done <small>tidak ada task (auto)</small>':r.ok?'✓ Done <small>'+r.st.dn+'/'+r.st.tn+' task</small>':'✕ Belum <small>'+r.st.dn+'/'+r.st.tn+' task · sisa '+mvQ(r.st.tq-r.st.dq)+' qty</small>')+'</td></tr>').join('')+'</tbody></table>'; };
-  const body=f==='sp'?spBody():sh.length?'<table class="pt spvtb"><thead><tr>'+(MVP.who===null?'<th>Salesperson</th>':'')+'<th>Item No</th><th>Description</th><th>No Nota</th><th>Type</th><th class="rt">Qty jual</th><th class="rt">Tersedia di X333</th><th>Status movement</th></tr></thead><tbody>'+sh.map(l=>'<tr>'+(MVP.who===null?'<td>'+esc(mvName(d,l[0]))+'</td>':'')+'<td class="num">'+esc(l[1])+'</td><td>'+esc(l[2])+'</td><td class="num">'+esc(l[3]||'–')+'</td><td>'+esc(l[6])+'</td><td class="num rt">'+mvQ(l[5])+'</td><td class="num rt">'+(l[7]?mvQ(Math.min(l[5],l[9]||0)):'–')+'</td>'+stc(l)+'</tr>').join('')+'</tbody></table>':'<p class="note" style="padding:14px 4px">Tidak ada item pada filter ini.</p>';
+  const body=f==='sp'?spBody():sh.length?'<table class="pt spvtb"><thead><tr>'+(MVP.who===null?'<th>Salesperson</th>':'')+'<th>Item No</th><th>Description</th><th>No Nota</th><th>Type</th>'+(hasLoc?'<th>Suggest Location</th>':'')+'<th class="rt">Qty jual</th><th class="rt">Tersedia di X333</th><th>Status movement</th></tr></thead><tbody>'+sh.map(l=>'<tr>'+(MVP.who===null?'<td>'+esc(mvName(d,l[0]))+'</td>':'')+'<td class="num">'+esc(l[1])+'</td><td>'+esc(l[2])+'</td><td class="num">'+esc(l[3]||'–')+'</td><td>'+esc(l[6])+'</td>'+(hasLoc?'<td>'+locChips(l,true)+'</td>':'')+'<td class="num rt">'+mvQ(l[5])+'</td><td class="num rt">'+(l[7]?mvQ(Math.min(l[5],l[9]||0)):'–')+'</td>'+stc(l)+'</tr>').join('')+'</tbody></table>':'<p class="note" style="padding:14px 4px">Tidak ada item pada filter ini.</p>';
   $('kpop-body').innerHTML=ctl+body; if(open) $('kpop-body').scrollTop=0;
 }
 document.addEventListener('click',ev=>{ const t=ev.target.closest&&ev.target.closest('#mv-body [data-mvf], #mv-body tr[data-mvz], #kpop-body [data-mvt], #kpop-body tr[data-mvsp]'); if(!t) return;
@@ -1582,9 +1595,19 @@ function renderDataBar(){
 }
 const errText = e => !e? '' : e.code==='quota_exceeded' ? 'Penyimpanan penuh.' : (e.code==='revoked'||e.code==='not_granted') ? 'Akses penyimpanan tidak tersedia.' : 'Penyimpanan gagal ('+(e.code||'error')+').';
 const dbErr = e => !e? '' : (e.code==='42501'||/row-level security|permission/i.test(e.message||'')) ? 'Akun Anda tidak punya izin mengubah data.' : 'Penyimpanan gagal ('+(e.message||e.code||'error')+').';
-async function persistMv(nav, moves){
+async function persistMv(nav, moves, locs){
   if(!SB) return 'Penyimpanan belum tersedia.';
   let fail=0, last=null; const now=new Date().toISOString();
+  if(locs&&locs.length){
+    const nps=[...new Set(locs.map(x=>x.np))];
+    for(let i=0;i<nps.length;i+=100){
+      const del=await SB.from('mv_loc').delete().eq('store_code',D.code).in('np_no',nps.slice(i,i+100)); if(del.error){ fail++; last=del.error; break; }
+    }
+    if(!fail) for(let i=0;i<locs.length;i+=400){
+      const rows=locs.slice(i,i+400).map(x=>({store_code:D.code,np_no:x.np,item_no:x.item,sales_id:x.sales||null,loc:x.loc,qty:x.qty,uploaded_at:now}));
+      const { error } = await SB.from('mv_loc').insert(rows); if(error){ fail++; last=error; break; }
+    }
+  }
   if(nav&&nav.length){
     for(let i=0;i<nav.length;i+=400){
       const chunk=nav.slice(i,i+400).map(x=>({store_code:D.code,np_no:x.np,type:x.type,order_date:x.date||null,uploaded_at:now}));
@@ -1648,7 +1671,7 @@ async function handleFiles(list){
   if(!canWrite){ setStatus('Peran Anda hanya bisa melihat data.','warn'); return; }
   if(!window.XLSX){ setStatus('Pembaca Excel gagal dimuat. Periksa koneksi, lalu muat ulang halaman.','err'); return; }
   busy=true; $('upload').disabled=true;
-  const found={}, notes=[], zres=[]; let used=0, newSched=null, newNav=null, newMoves=null, movRows=0;
+  const found={}, notes=[], zres=[]; let used=0, newSched=null, newNav=null, newLocs=null, newMoves=null, movRows=0;
   for(const f of files){
     try{
       setStatus('Membaca '+f.name+'…');
@@ -1659,7 +1682,7 @@ async function handleFiles(list){
       catch(e){
         if(!/Receipt Date/.test(e&&e.message||'')) throw e;
         try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); const cz=effectiveSched(); if(cz&&cz.zones) sc.zones=cz.zones; newSched=sc; continue; }catch(e2){}
-        try{ const nv=parseNav(window.XLSX, buf); newNav=(newNav||[]).concat(nv.nav); continue; }catch(e3){}
+        try{ const nv=parseNav(window.XLSX, buf); newNav=(newNav||[]).concat(nv.nav); if(nv.locs&&nv.locs.length) newLocs=(newLocs||[]).concat(nv.locs); continue; }catch(e3){}
         try{ const mm=parseMoves(window.XLSX, buf); newMoves=newMoves||{}; for(const d in mm.moves){ const t=newMoves[d]||(newMoves[d]={}); for(const k in mm.moves[d]){ const v=mm.moves[d][k]; if(t[k]){ t[k].q+=v.q; t[k].n+=v.n; } else t[k]=v; } } movRows+=mm.used; continue; }catch(e4){}
         throw new Error('format tidak dikenali (bukan Sales Detail, jadwal & target, Nota Penjualan NAV, atau Stock Movement)');
       }
@@ -1684,11 +1707,11 @@ async function handleFiles(list){
   const parts=[];
   if(ds.length){ const rng = ds.length>1? fd(ds[0],{day:'numeric',month:'short'})+' sampai '+fd(ds[ds.length-1],{day:'numeric',month:'short',year:'numeric'}) : fd(ds[0]); parts.push(fmtN.format(used)+' baris penjualan, '+ds.length+' hari ('+rng+')'); }
   if(newSched) parts.push('jadwal & target '+newSched.people.length+' orang');
-  if(newNav) parts.push('Nota Penjualan NAV '+newNav.length+' nota');
+  if(newNav) parts.push('Nota Penjualan NAV '+newNav.length+' nota'+(newLocs?', '+newLocs.length+' baris Suggest Location':''));
   if(newMoves) parts.push('Stock Movement '+movRows+' baris ('+Object.keys(newMoves).sort().map(d=>fd(d,{day:'numeric',month:'short'})).join(', ')+')');
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'. Menyimpan…');
   let err=await persist(ds, newSched);
-  if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves); if(e2) err=(err?err+' ':'')+e2; MV.ver++; Object.keys(MVC).forEach(k=>delete MVC[k]); mvRender(); }
+  if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves,newLocs); if(e2) err=(err?err+' ':'')+e2; MV.ver++; Object.keys(MVC).forEach(k=>delete MVC[k]); mvRender(); }
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'.'+(err? ' '+err : (dbRef?' Tersimpan.':''))+(notes.length?' '+notes.join(' '):'')+(zmsg?'\n\n'+zmsg:''), err||notes.length||zbad?'warn':'ok');
   ZEXP=null; busy=false; $('upload').disabled=false; ckRefresh();
 }
