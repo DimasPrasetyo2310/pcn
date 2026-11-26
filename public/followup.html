@@ -139,6 +139,14 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 .qpanel{border:2px solid #0b7a43;border-radius:12px;padding:12px 14px;background:#f1fbf5;display:flex;flex-direction:column;gap:10px}
 .qpanel .bar i{background:#0b7a43}
 .qrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.zones{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.zcard{all:unset;box-sizing:border-box;cursor:pointer;background:var(--surface);border:1.5px solid var(--frame);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow)}
+.zcard:hover{border-color:var(--accent)}
+.zcard[aria-pressed="true"]{border-color:var(--navy);box-shadow:0 0 0 2px var(--navy) inset,var(--shadow);background:var(--accent-soft)}
+.zcard .l{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3);font-weight:700}
+.zcard .v{font-family:var(--f-display);font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.15}
+.zcard .s{font-size:12.5px;color:var(--ink2)}
+.zcard .bar{margin-top:4px}
 .sendbar{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .sendbar b{font-family:var(--f-display);font-size:24px}
 .sendbar.warn b{color:var(--crit)}
@@ -208,6 +216,7 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
   <div id="msg" class="msg" role="status" hidden></div>
 
   <section class="kpis" id="kpis" aria-label="Ringkasan"></section>
+  <section class="zones" id="zones" aria-label="Ringkasan per zonasi" hidden></section>
 
   <section class="card">
     <div class="controls">
@@ -409,8 +418,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=202611261248"></script>
-<script src="js/presence.js?v=202611261248"></script>
-<script src="js/followup.js?v=202611261248"></script>
+<script src="config.js?v=202611261530"></script>
+<script src="js/presence.js?v=202611261530"></script>
+<script src="js/followup.js?v=202611261530"></script>
 </body>
 </html>

@@ -154,8 +154,23 @@ function renderZFilters(){
     $(id).parentElement.hidden=!MANAGER||v.length<2};
   opt('f-zona','zona',F.zona);opt('f-cat','cat',F.cat);
 }
+function renderZones(){
+  const box=$('zones');
+  if(!MANAGER){box.hidden=true;return}
+  const S=spStats(),by=new Map();
+  S.forEach(r=>{const k=r.zona||'(belum ada)';let z=by.get(k);if(!z){z={k,sp:0,total:0,done:0,today:0,deal:0};by.set(k,z)}
+    z.sp++;z.total+=r.total;z.done+=r.done;z.today+=r.today;z.deal+=r.deal});
+  const Z=[...by.values()].sort((a,b)=>a.k.localeCompare(b.k,'id',{numeric:true}));
+  box.hidden=Z.length<2&&!Z.some(z=>z.k!=='(belum ada)');
+  box.innerHTML=Z.map(z=>{const pct=z.total?z.done/z.total:0;
+    return `<button type="button" class="zcard" data-z="${esc(z.k)}" aria-pressed="${F.zona===z.k}">
+      <span class="l">${esc(z.k)}</span><span class="v">${nf.format(z.total)}</span>
+      <span class="s">${nf.format(z.sp)} salesperson · ${nf.format(z.done)} dihubungi${z.today?' · '+nf.format(z.today)+' hari ini':''}</span>
+      <div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><i style="width:${(pct*100).toFixed(1)}%"></i></div><span class="num" style="font-size:12px">${dec(pct*100,1)}%</span></div></button>`}).join('');
+  box.querySelectorAll('[data-z]').forEach(b=>b.addEventListener('click',()=>{F.zona=F.zona===b.dataset.z?'':b.dataset.z;$('f-zona').value=F.zona;renderZones();renderTable()}));
+}
 function render(){
-  renderZFilters();renderKpis();renderTable();
+  renderZFilters();renderKpis();renderZones();renderTable();
   $('scope').textContent=MANAGER?'Semua salesperson · '+nf.format(CUST.length)+' customer':(MYSALES.length?'Customer milik '+MYSALES.join(', '):'Akun Anda belum dihubungkan ke nama salesperson. Hubungi admin.');
   if($('dlg-sp').open)renderSp();
 }
@@ -617,7 +632,7 @@ $('btn-acct').addEventListener('click',async()=>{
 $('a-add').addEventListener('click',async()=>{await saveAcct($('a-name').value,$('a-email').value,$('a-pass').value);$('a-name').value='';$('a-email').value='';$('a-pass').value=''});
 
 /* ---------- Kontrol ---------- */
-$('f-zona').addEventListener('change',e=>{F.zona=e.target.value;renderTable()});
+$('f-zona').addEventListener('change',e=>{F.zona=e.target.value;renderZones();renderTable()});
 $('f-cat').addEventListener('change',e=>{F.cat=e.target.value;renderTable()});
 let qT;$('q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{F.q=e.target.value;renderTable()},150)});
 document.querySelectorAll('th [data-sort]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const k=b.dataset.sort;if(SORT.k===k){if(SORT.dir===-1){SORT={k:'',dir:1}}else SORT.dir=-1}else SORT={k,dir:['total','done','todo','today','deal'].includes(k)?-1:1};renderTable()}));
