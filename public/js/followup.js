@@ -31,8 +31,8 @@ const CFG=window.APP_CONFIG||{};
 const SB=(window.supabase&&CFG.SUPABASE_URL&&CFG.SUPABASE_PUBLISHABLE_KEY&&!/YOUR-/.test(CFG.SUPABASE_URL))?window.supabase.createClient(CFG.SUPABASE_URL,CFG.SUPABASE_PUBLISHABLE_KEY):null;
 
 let ME='',ROLE='',MANAGER=false,ADMIN=false,MYSALES=[];
-let CUST=[],SALES=[],USERS=[];
-const F={q:'',sales:'',due:'',status:''};
+let CUST=[],SALES=[],USERS=[],ZMAP=new Map();
+const F={q:'',sales:'',due:'',status:'',zona:'',cat:''};
 let SORT={k:'',dir:1},PAGE=0;const PER=50;
 let CUR=null;
 
@@ -65,6 +65,8 @@ async function loadData(){
     fetchAll('fu_salespeople','name,email,sales_id','name')
   ]);
   CUST=c.map(r=>({...r,potensi:+r.potensi||0}));SALES=s;
+  try{const {data:sd}=await SB.from('dashboard_schedule').select('doc').eq('store_code','10005').maybeSingle();
+    ZMAP=new Map(((sd&&sd.doc&&sd.doc.people)||[]).map(p=>[String(p.id||'').trim().toUpperCase(),{zona:String(p.zona||'').trim().toUpperCase(),cat:String(p.cat||'').trim().toUpperCase()}]));}catch(e){}
   MYSALES=SALES.filter(x=>x.email&&x.email.toLowerCase()===ME.toLowerCase()).map(x=>x.name);
 }
 const salesNames=()=>[...new Set([...SALES.map(s=>s.name),...CUST.map(c=>c.salesperson).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'id'));
@@ -94,9 +96,10 @@ const jkDate=ts=>ts?new Date(ts).toLocaleDateString('sv-SE',{timeZone:'Asia/Jaka
 const contacted=c=>c.status!=='Baru'||!!c.last_contact;
 const sentToday=c=>!!c.last_contact&&jkDate(c.last_contact)===today();
 const sidOf=n=>{const s=SALES.find(x=>x.name===n);return s&&s.sales_id?s.sales_id:''};
+const zinfo=n=>ZMAP.get(String(sidOf(n)).toUpperCase())||{zona:'',cat:''};
 function spStats(){
   const by=new Map();
-  CUST.forEach(c=>{const k=c.salesperson||'(tanpa salesperson)';let r=by.get(k);if(!r){r={name:k,sid:sidOf(k),total:0,done:0,today:0,deal:0};by.set(k,r)}
+  CUST.forEach(c=>{const k=c.salesperson||'(tanpa salesperson)';let r=by.get(k);if(!r){const z=zinfo(k);r={name:k,sid:sidOf(k),zona:z.zona,cat:z.cat,total:0,done:0,today:0,deal:0};by.set(k,r)}
     r.total++;if(contacted(c))r.done++;if(sentToday(c))r.today++;if(c.status==='Deal')r.deal++});
   return [...by.values()].map(r=>({...r,todo:r.total-r.done}));
 }
@@ -115,21 +118,25 @@ function renderTable(){
   const q=F.q.trim().toLowerCase();
   let L=spStats();
   if(q)L=L.filter(r=>r.name.toLowerCase().includes(q)||r.sid.toLowerCase().includes(q));
+  if(F.zona)L=L.filter(r=>(r.zona||'(belum ada)')===F.zona);
+  if(F.cat)L=L.filter(r=>(r.cat||'(belum ada)')===F.cat);
   const k=SORT.k||'sid',d=SORT.k?SORT.dir:1;
   L.sort((a,b)=>(typeof a[k]==='number'?(a[k]-b[k]):String(a[k]||'~').localeCompare(String(b[k]||'~'),'id'))*d);
   $('rows').innerHTML=L.length?L.map(r=>{const pct=r.total?r.done/r.total:0;
     return `<tr data-sp="${esc(r.name)}" tabindex="0">
-      <td data-l="ID" class="num">${esc(r.sid||'–')}</td>
+      <td data-l="ID" class="num nw">${esc(r.sid||'–')}</td>
       <td class="cname"><button type="button" class="spname">${esc(r.name)}</button></td>
+      <td data-l="Zonasi" class="nw">${r.zona?esc(r.zona):'<span class="muted">–</span>'}</td>
+      <td data-l="Category">${r.cat?esc(r.cat):'<span class="muted">–</span>'}</td>
       <td class="r num" data-l="Total">${nf.format(r.total)}</td>
       <td class="r num" data-l="Sudah">${nf.format(r.done)}</td>
       <td class="r num" data-l="Belum">${nf.format(r.todo)}</td>
       <td class="r num" data-l="Hari ini">${r.today?nf.format(r.today):'<span class="muted">0</span>'}</td>
       <td class="r num" data-l="Deal">${r.deal?nf.format(r.deal):'<span class="muted">0</span>'}</td>
       <td data-l="Progres"><div style="display:flex;align-items:center;gap:8px"><div class="bar"><i style="width:${(pct*100).toFixed(0)}%"></i></div><span class="num">${dec(pct*100,0)}%</span></div></td></tr>`}).join('')
-    :`<tr><td colspan="8" class="empty">${CUST.length?'Tidak ada salesperson yang cocok.':(MANAGER?'Belum ada customer. Klik "Impor Excel" untuk memasukkan data.':'Belum ada customer untuk Anda.')}</td></tr>`;
+    :`<tr><td colspan="10" class="empty">${CUST.length?'Tidak ada salesperson yang cocok.':(MANAGER?'Belum ada customer. Klik "Impor Excel" untuk memasukkan data.':'Belum ada customer untuk Anda.')}</td></tr>`;
   const T=L.reduce((s,r)=>({t:s.t+r.total,d:s.d+r.done,h:s.h+r.today,x:s.x+r.deal}),{t:0,d:0,h:0,x:0});
-  $('foot').innerHTML=L.length>1?`<tr><td colspan="2">${nf.format(L.length)} salesperson</td><td class="r num">${nf.format(T.t)}</td><td class="r num">${nf.format(T.d)}</td><td class="r num">${nf.format(T.t-T.d)}</td><td class="r num">${nf.format(T.h)}</td><td class="r num">${nf.format(T.x)}</td><td></td></tr>`:'';
+  $('foot').innerHTML=L.length>1?`<tr><td colspan="4">${nf.format(L.length)} salesperson</td><td class="r num">${nf.format(T.t)}</td><td class="r num">${nf.format(T.d)}</td><td class="r num">${nf.format(T.t-T.d)}</td><td class="r num">${nf.format(T.h)}</td><td class="r num">${nf.format(T.x)}</td><td></td></tr>`:'';
   $('rows').querySelectorAll('tr[data-sp]').forEach(tr=>{const open=()=>openSp(tr.dataset.sp);
     tr.addEventListener('click',open);tr.addEventListener('keydown',e=>{if(e.key==='Enter')open()})});
   // pencarian customer lintas salesperson
@@ -141,8 +148,14 @@ function renderTable(){
     hits.querySelectorAll('tr[data-id]').forEach(tr=>tr.addEventListener('click',()=>openCust(+tr.dataset.id)));
   }else hits.hidden=true;
 }
+function renderZFilters(){
+  const S=spStats(),opt=(id,key,cur)=>{const v=[...new Set(S.map(r=>r[key]||'(belum ada)'))].sort((a,b)=>a.localeCompare(b,'id',{numeric:true}));
+    $(id).innerHTML='<option value="">Semua</option>'+v.map(x=>`<option${x===cur?' selected':''}>${esc(x)}</option>`).join('');
+    $(id).parentElement.hidden=!MANAGER||v.length<2};
+  opt('f-zona','zona',F.zona);opt('f-cat','cat',F.cat);
+}
 function render(){
-  renderKpis();renderTable();
+  renderZFilters();renderKpis();renderTable();
   $('scope').textContent=MANAGER?'Semua salesperson · '+nf.format(CUST.length)+' customer':(MYSALES.length?'Customer milik '+MYSALES.join(', '):'Akun Anda belum dihubungkan ke nama salesperson. Hubungi admin.');
   if($('dlg-sp').open)renderSp();
 }
@@ -155,7 +168,8 @@ function renderSp(){
   const all=CUST.filter(c=>(c.salesperson||'(tanpa salesperson)')===SPCUR);
   const sid=sidOf(SPCUR),done=all.filter(contacted).length,tod=all.filter(sentToday).length;
   $('sp-title').textContent=SPCUR;
-  $('sp-sub').textContent=`${sid?sid+' · ':''}${nf.format(all.length)} customer · ${nf.format(done)} sudah dihubungi · ${nf.format(all.length-done)} belum`;
+  const zi=zinfo(SPCUR);
+  $('sp-sub').textContent=`${sid?sid+' · ':''}${zi.zona?zi.zona+' · ':''}${zi.cat?zi.cat+' · ':''}${nf.format(all.length)} customer · ${nf.format(done)} sudah dihubungi · ${nf.format(all.length-done)} belum`;
   $('sp-today').textContent=nf.format(tod);
   const warn=tod>=DAILY_SAFE;$('sp-today').parentElement.classList.toggle('warn',warn);
   $('sp-limit').textContent=warn?`Sudah ${DAILY_SAFE}+ pesan hari ini. Sebaiknya lanjutkan besok agar nomor tidak diblokir WhatsApp.`:`Batas aman ±${DAILY_SAFE} pesan per hari per nomor.`;
@@ -455,8 +469,8 @@ $('btn-tpl').addEventListener('click',()=>{
 $('btn-export').addEventListener('click',()=>{
   if(!window.XLSX)return;
   const S=spStats().sort((a,b)=>String(a.sid||'~').localeCompare(String(b.sid||'~')));
-  const ws1=XLSX.utils.aoa_to_sheet([['Salesperson ID','Salesperson','Total Database','Sudah Dihubungi','Belum Dihubungi','Terkirim Hari Ini','Deal'],...S.map(r=>[r.sid,r.name,r.total,r.done,r.todo,r.today,r.deal])]);
-  ws1['!cols']=[{wch:20},{wch:30},{wch:14},{wch:15},{wch:15},{wch:16},{wch:8}];
+  const ws1=XLSX.utils.aoa_to_sheet([['Salesperson ID','Salesperson','Zonasi','Category','Total Database','Sudah Dihubungi','Belum Dihubungi','Terkirim Hari Ini','Deal'],...S.map(r=>[r.sid,r.name,r.zona,r.cat,r.total,r.done,r.todo,r.today,r.deal])]);
+  ws1['!cols']=[{wch:20},{wch:30},{wch:10},{wch:24},{wch:14},{wch:15},{wch:15},{wch:16},{wch:8}];
   const L=CUST.slice().sort((a,b)=>String(a.salesperson||'').localeCompare(String(b.salesperson||''),'id')||a.nama.localeCompare(b.nama,'id'));
   const ws2=XLSX.utils.aoa_to_sheet([['Salesperson ID','Salesperson','No Member','Nama Customer','No HP','Status','Terakhir Dihubungi','Keterangan'],
     ...L.map(c=>[sidOf(c.salesperson),c.salesperson||'',c.member_no||'',c.nama,c.hp||'',c.status,c.last_contact?fdt(c.last_contact):'',c.catatan||''])]);
@@ -494,6 +508,8 @@ $('btn-acct').addEventListener('click',async()=>{
 $('a-add').addEventListener('click',async()=>{await saveAcct($('a-name').value,$('a-email').value,$('a-pass').value);$('a-name').value='';$('a-email').value='';$('a-pass').value=''});
 
 /* ---------- Kontrol ---------- */
+$('f-zona').addEventListener('change',e=>{F.zona=e.target.value;renderTable()});
+$('f-cat').addEventListener('change',e=>{F.cat=e.target.value;renderTable()});
 let qT;$('q').addEventListener('input',e=>{clearTimeout(qT);qT=setTimeout(()=>{F.q=e.target.value;renderTable()},150)});
 document.querySelectorAll('th [data-sort]').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const k=b.dataset.sort;if(SORT.k===k){if(SORT.dir===-1){SORT={k:'',dir:1}}else SORT.dir=-1}else SORT={k,dir:['total','done','todo','today','deal'].includes(k)?-1:1};renderTable()}));
 

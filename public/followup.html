@@ -104,6 +104,7 @@ tfoot td{font-weight:700;border-top:2px solid var(--frame);border-bottom:0;backg
 .due.late{color:var(--crit);font-weight:600}
 .due.today{color:var(--warn);font-weight:600}
 .muted{color:var(--ink3)}
+.nw{white-space:nowrap}
 .empty{padding:28px;text-align:center;color:var(--ink3)}
 .pager{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px;font-size:13px;color:var(--ink2)}
 
@@ -202,6 +203,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
     <div class="controls">
       <div class="filters">
         <div class="field" style="min-width:260px"><label for="q">Cari</label><input type="search" id="q" placeholder="Nama / ID salesperson, atau nama / no. HP customer"></div>
+        <div class="field"><label for="f-zona">Zonasi</label><select id="f-zona"><option value="">Semua</option></select></div>
+        <div class="field"><label for="f-cat">Category</label><select id="f-cat"><option value="">Semua</option></select></div>
       </div>
       <div class="actions">
         <button type="button" class="btn primary" id="btn-msgtpl">Template Pesan</button>
@@ -218,6 +221,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
         <thead><tr>
           <th><button data-sort="sid">Salesperson ID</button></th>
           <th><button data-sort="name">Salesperson</button></th>
+          <th><button data-sort="zona">Zonasi</button></th>
+          <th><button data-sort="cat">Category</button></th>
           <th class="r"><button data-sort="total">Total database</button></th>
           <th class="r"><button data-sort="done">Sudah dihubungi</button></th>
           <th class="r"><button data-sort="todo">Belum dihubungi</button></th>
@@ -377,8 +382,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=202611132031"></script>
-<script src="js/presence.js?v=202611132031"></script>
-<script src="js/followup.js?v=202611132031"></script>
+<script src="config.js?v=202611261144"></script>
+<script src="js/presence.js?v=202611261144"></script>
+<script src="js/followup.js?v=202611261144"></script>
 </body>
 </html>
