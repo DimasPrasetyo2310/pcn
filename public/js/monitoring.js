@@ -402,9 +402,19 @@ function explain(err){
 
 /* Checklist database wajib unggah + template standar */
 const CKOPEN={};
+let CKSEL=null, UPMON=null;
+const MONFULL=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+/* Periode checklist: selalu bulan kalender berjalan (bulan lama otomatis lepas tiap tanggal 1); bulan berikutnya bisa dipilih pada 7 hari terakhir untuk unggah lebih awal. */
 function ckPeriod(){
-  const ref=to||(DATA.D.length?DATA.D.map(r=>r.d).sort().slice(-1)[0]:'')||new Date().toISOString().slice(0,10);
+  const t=new Date(), today=t.getFullYear()+'-'+pad2(t.getMonth()+1)+'-'+pad2(t.getDate()), tm=today.slice(0,7), sel=CKSEL||tm;
+  let ref; if(sel>tm) ref=sel+'-01'; else { const md=DATA.D.map(r=>r.d).filter(d=>d.slice(0,7)===sel).sort(); ref=md.length?md[md.length-1]:(sel===tm?today:sel+'-01'); }
   return {y:+ref.slice(0,4),m:+ref.slice(5,7),day:+ref.slice(8,10),ref};
+}
+function ckMonRender(){
+  const box=$('ckMon'); if(!box) return;
+  const n=new Date(), ym=(y,m)=>y+'-'+pad2(m), cur=ym(n.getFullYear(),n.getMonth()+1), nx=n.getMonth()===11?ym(n.getFullYear()+1,1):ym(n.getFullYear(),n.getMonth()+2), sel=CKSEL||cur;
+  const ms=(n.getDate()>new Date(n.getFullYear(),n.getMonth()+1,0).getDate()-7)?[cur,nx]:[cur];
+  box.innerHTML='<span class="hint2">Pilih bulan:</span> '+ms.map(m=>'<button type="button" class="chip" data-ckmon="'+m+'" aria-pressed="'+(m===sel)+'">'+MONFULL[+m.slice(5,7)-1]+' '+m.slice(0,4)+'</button>').join(' ');
 }
 const dlab=d=>(+d.slice(8))+' '+MON[+d.slice(5,7)-1];
 const dlist=a=>a.length?a.slice(0,12).map(dlab).join(', ')+(a.length>12?' dan '+(a.length-12)+' tanggal lain':''):'';
@@ -457,25 +467,28 @@ function dlTpl(kinds){
 }
 function renderCk(){
   if(!$('ckBtn')) return;
+  ckMonRender();
   const it=ckItems(), nOk=it.filter(x=>x.state==='ok').length, P=ckPeriod();
   const worst=it.some(x=>x.state==='bad')?'bad':it.some(x=>x.state==='warn')?'warn':'ok';
   $('ckBtn').className='ckbtn '+worst; $('ckBtn').innerHTML='<span class="ckdot"></span>Checklist database <b>'+nOk+'/'+it.length+'</b>';
   const ic={ok:'✓',warn:'!',bad:'✕'};
   $('ckList').innerHTML=it.map((x,i)=>'<li class="ckrow '+x.state+(CKOPEN[x.id]?' open':'')+'"><button type="button" class="ckhead" data-ck="'+x.id+'" aria-expanded="'+!!CKOPEN[x.id]+'"><span class="ckic">'+ic[x.state]+'</span><span class="cktx"><b>'+(i+1)+'. '+x.title+'</b><small>'+x.summary+'</small></span><span class="ckch">▾</span></button>'
     +'<div class="ckdet"><p>'+x.lines.map(l=>l.replace(/&/g,'&amp;').replace(/</g,'&lt;')).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite?'<button type="button" class="ckchip" data-up="1">Unggah file</button>':'')+'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh template</button></div></div></li>').join('');
-  $('ckSub').textContent='Periode '+MON[P.m-1]+' '+P.y+', sampai '+dlab(P.ref)+' (mengikuti tanggal "Sampai")';
+  $('ckSub').textContent='Periode '+MON[P.m-1]+' '+P.y+', sampai '+dlab(P.ref);
 }
 document.addEventListener('click',e=>{
   const b=e.target.closest('#ckBtn'); if(b){const o=$('ckPanel').hidden;$('ckPanel').hidden=!o;b.setAttribute('aria-expanded',String(o));return}
   const h=e.target.closest('.ckhead'); if(h){CKOPEN[h.dataset.ck]=!CKOPEN[h.dataset.ck];renderCk();return}
-  const u=e.target.closest('[data-up]'); if(u){$('file').click();return}
+  const cm=e.target.closest('[data-ckmon]'); if(cm){const n=new Date(),cur=n.getFullYear()+'-'+pad2(n.getMonth()+1);CKSEL=cm.dataset.ckmon===cur?null:cm.dataset.ckmon;renderCk();return}
+  const u=e.target.closest('[data-up]'); if(u){const P=ckPeriod();UPMON=P.y+'-'+pad2(P.m);$('file').click();return}
   const t=e.target.closest('[data-tpl]'); if(t){const it=ckItems().find(x=>x.id===t.dataset.tpl);const k=it.tpl.slice();if(it.id==='ly')k.ly=true;dlTpl(k);return}
   if(e.target.closest('#ckAll')){dlTpl(['nav','detail','budget','phasing','kpi']);return}
   if(!e.target.closest('#ckPanel')&&$('ckPanel')&&!$('ckPanel').hidden){$('ckPanel').hidden=true;$('ckBtn').setAttribute('aria-expanded','false')}
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('ckPanel')&&!$('ckPanel').hidden){$('ckPanel').hidden=true;$('ckBtn').focus()}});
 
-$('upBtn').addEventListener('click',()=>$('file').click());
+$('upBtn').addEventListener('click',()=>{UPMON=null;$('file').click()});
+if($('ckPanel')&&window.MutationObserver) new MutationObserver(()=>{if($('ckPanel').hidden&&CKSEL){CKSEL=null;renderCk()}}).observe($('ckPanel'),{attributes:true,attributeFilter:['hidden']});
 /* Penanda sedang diunggah: satu orang per waktu, kunci berlaku 10 menit dan diperpanjang selama proses */
 let ME='', LOCKBUSY=null, lockTimer=null, UPLOADING=false;
 const LOCKMIN=10, tmx=iso=>new Date(iso).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}).replace('.',':');
@@ -538,6 +551,16 @@ async function doUpload(files){
   const ok=[],bad=[];
   for(const f of files){try{const r=await parseFile(f);ok.push(...r);r.skipped.forEach(x=>bad.push(f.name+' / '+x))}catch(err){bad.push(f.name+': '+explain(err))}}
   const parts=[];
+  if(UPMON){ // batasi ke bulan yang dipilih (atau bulan yang sama tahun lalu, untuk data pembanding LY)
+    const okM=d=>{const m=String(d||'').slice(0,7);return m===UPMON||m===(+UPMON.slice(0,4)-1)+UPMON.slice(4)}, ml=MONFULL[+UPMON.slice(5,7)-1]+' '+UPMON.slice(0,4);
+    for(const r of ok){
+      const fl=(a,k)=>Array.isArray(a)?a.filter(x=>okM(x[k])):a;
+      if(r.kind==='nav'||r.kind==='phasing'||r.kind==='kpibudget'){const k=r.kind==='nav'?'sale_date':r.kind==='phasing'?'phase_date':'budget_date',n0=r.rows.length;r.rows=fl(r.rows,k);if(n0-r.rows.length)bad.push(r.name+': '+(n0-r.rows.length)+' hari di luar '+ml+' diabaikan')}
+      else if(r.kind==='detail'||!r.kind){const n0=new Set((r.rows||[]).map(x=>x.sale_date)).size;['rows','items','cube','dims','brands','members'].forEach(a=>{if(r[a])r[a]=fl(r[a],'sale_date')});const n1=new Set((r.rows||[]).map(x=>x.sale_date)).size;if(n0-n1)bad.push(r.name+': '+(n0-n1)+' hari di luar '+ml+' diabaikan')}
+    }
+    for(let i=ok.length-1;i>=0;i--){const r=ok[i];if((r.kind==='nav'||r.kind==='phasing'||r.kind==='kpibudget'||r.kind==='detail')&&!(r.rows||[]).length)ok.splice(i,1)}
+    UPMON=null;
+  }
   for(const r of ok){
     try{
       if(r.kind==='nav'){await upsertChunks('store_daily',r.rows,'store_code,sale_date');parts.push('Report Compare FFC dan NAV: '+r.rows.length+' hari')}
