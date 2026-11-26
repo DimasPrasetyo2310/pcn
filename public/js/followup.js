@@ -234,6 +234,11 @@ function pickTpl(){
   const v=$('sp-tpl').value;if(v==='rr'){const t=act[TPL_RR%act.length];TPL_RR++;return t}
   return act.find(t=>String(t.id)===v)||act[0];
 }
+/* Cara membuka WhatsApp: WhatsApp Web di laptop (emoji aman), aplikasi di HP. Pilihan diingat per perangkat. */
+const isMobile=()=>/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+function waMode(){let m='';try{m=localStorage.getItem('fu_wa_mode')||''}catch(e){}return m==='web'||m==='app'?m:(isMobile()?'app':'web')}
+$('sp-mode').value=waMode();
+$('sp-mode').addEventListener('change',e=>{try{localStorage.setItem('fu_wa_mode',e.target.value)}catch(x){}});
 /* Gambar template: disiapkan sebagai PNG agar bisa disalin ke clipboard */
 const IMGC=new Map();
 function pngBlob(url){
@@ -266,7 +271,9 @@ async function sendWa(id,btn){
   const ph=text.match(/\[[A-Z0-9 /.\-–]{2,}\]/g);
   if(ph){dlgMsg('sp-msg',`Template "${t.judul}" masih berisi bagian yang belum diisi: ${[...new Set(ph)].join(', ')}. Minta admin melengkapinya di menu Template Pesan.`,'err');return}
   const cp=t.gambar_url?copyImg(t.gambar_url).then(()=>true,()=>false):Promise.resolve(null);
-  window.open('https://wa.me/'+num+'?text='+encodeURIComponent(text),'_blank','noopener');
+  const mode=waMode(),enc=encodeURIComponent(text);
+  if(mode==='web')window.open('https://web.whatsapp.com/send?phone='+num+'&text='+enc,'wa_blast');
+  else window.open('https://api.whatsapp.com/send?phone='+num+'&text='+enc,'_blank','noopener');
   const copied=await cp;
   if(btn){btn.disabled=true}
   try{
@@ -275,7 +282,8 @@ async function sendWa(id,btn){
     const {data,error:e2}=await SB.from('fu_customers').update({status:st,last_contact:now}).eq('id',c.id).select().single();if(e2)throw e2;
     Object.assign(c,data,{potensi:+data.potensi||0});
     const tod=CUST.filter(x=>x.salesperson===c.salesperson&&sentToday(x)).length;
-    const imgNote=copied===true?' Gambar sudah tersalin: tekan Ctrl+V (atau tahan kolom pesan → Tempel) di WhatsApp, lalu Kirim.':copied===false?' Gambar tidak bisa disalin otomatis di perangkat ini, pakai tombol "Unduh gambar" lalu lampirkan manual.':'';
+    const paste=mode==='web'?'tekan Ctrl+V di kolom chat':'tahan kolom pesan → Tempel';
+    const imgNote=copied===true?` Gambar sudah tersalin. Setelah chat terbuka: 1) ${paste} untuk menempel gambar, 2) tekan Kirim. Bila teks tidak ikut menjadi keterangan gambar, tekan Kirim sekali lagi untuk teksnya.`:copied===false?' Gambar tidak bisa disalin otomatis di perangkat ini, pakai tombol "Unduh gambar" lalu lampirkan manual.':'';
     dlgMsg('sp-msg',tod>=DAILY_SAFE?`Pesan ke ${c.nama} tercatat. Hari ini sudah ${tod} pesan, sebaiknya berhenti dan lanjut besok supaya nomor WhatsApp tidak diblokir.${imgNote}`:`Pesan ke ${c.nama} tercatat (template "${t.judul}"). Pastikan sudah menekan Kirim di WhatsApp.${imgNote}`,tod>=DAILY_SAFE||copied===false?'err':'ok');
     render();
   }catch(e){dlgMsg('sp-msg','WhatsApp terbuka, tapi gagal mencatat: '+errText(e),'err');if(btn)btn.disabled=false}

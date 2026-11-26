@@ -253,6 +253,7 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
     <div id="sp-msg" class="msg" hidden></div>
     <div class="box" style="display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;justify-content:space-between">
       <div class="field" style="min-width:240px;flex:1"><label for="sp-tpl">Template pesan</label><select id="sp-tpl"></select></div>
+      <div class="field" style="min-width:200px"><label for="sp-mode">Buka WhatsApp lewat</label><select id="sp-mode"><option value="web">WhatsApp Web (laptop/PC)</option><option value="app">Aplikasi WhatsApp (HP)</option></select></div>
       <div class="sp-img" id="sp-imgwrap" hidden><img id="sp-img" alt="Gambar template"><div><div class="muted" style="font-size:12px">Gambar ikut dikirim: setelah WhatsApp terbuka, tekan <b>Ctrl+V</b> / tahan kolom pesan → <b>Tempel</b>.</div>
         <div class="actions" style="margin-top:6px"><button type="button" class="btn sm" id="sp-img-copy">Salin gambar</button><a class="btn sm" id="sp-img-dl" download target="_blank" rel="noopener">Unduh gambar</a></div></div></div>
       <div class="sendbar"><span class="flabel">Terkirim hari ini</span><b class="num" id="sp-today">0</b><span class="muted" id="sp-limit"></span></div>
@@ -395,8 +396,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=202611261210"></script>
-<script src="js/presence.js?v=202611261210"></script>
-<script src="js/followup.js?v=202611261210"></script>
+<script src="config.js?v=202611261222"></script>
+<script src="js/presence.js?v=202611261222"></script>
+<script src="js/followup.js?v=202611261222"></script>
 </body>
 </html>
