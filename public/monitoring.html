@@ -64,7 +64,8 @@ body.dropping::after{content:"Lepaskan file Excel di sini untuk mengunggah";posi
 .msg{font-size:13px;padding:9px 14px;border-radius:10px}
 .msg.ok{background:var(--good-bg);color:var(--good)}.msg.err{background:var(--crit-bg);color:var(--crit)}.msg.info{background:var(--accent-soft);color:var(--accent-ink)}
 .note{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:9px 14px;font-size:13px}
-.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+.kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px}
+.kpi.be{border-top:4px solid var(--amber);cursor:default}
 .kpi{background:var(--surface);border:1.5px solid var(--frame);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:2px;min-width:0;box-shadow:var(--shadow)}
 .kh{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .ic{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--accent-soft);color:var(--accent-ink);flex:none}
@@ -122,8 +123,8 @@ tfoot td{font-weight:700;border-top:2px solid var(--frame);border-bottom:0;backg
 .gate-card .sub{color:var(--ink2)}
 .kpi .v{white-space:nowrap}
 .chart>div:not(.legend){overflow-x:auto}
-@media (max-width:1000px){.kpi.hero{grid-column:span 2}}
-@media (max-width:860px){.kpi.hero{grid-column:1/-1}}
+@media (max-width:1000px){.kpi.hero,.kpi.be{grid-column:span 1}}
+@media (max-width:860px){.kpi.hero{grid-column:1/-1}.kpi.be{grid-column:1/-1}}
 @media (max-width:560px){.chart svg{min-width:560px}}
 #tip{position:fixed;z-index:20;pointer-events:none;background:var(--ink);color:var(--bg);font-size:12px;padding:6px 9px;border-radius:6px;opacity:0;transition:opacity .08s;max-width:240px}
 [data-tip]{cursor:default}
