@@ -271,11 +271,12 @@ async function sendWa(id,btn){
   const t=pickTpl(),text=renderMsg(t.isi,c,c.salesperson);
   const ph=text.match(/\[[A-Z0-9 /.\-–]{2,}\]/g);
   if(ph){dlgMsg('sp-msg',`Template "${t.judul}" masih berisi bagian yang belum diisi: ${[...new Set(ph)].join(', ')}. Minta admin melengkapinya di menu Template Pesan.`,'err');return false}
-  const cp=t.gambar_url?copyImg(t.gambar_url).then(()=>true,()=>false):Promise.resolve(null);
+  // Salin gambar dulu selagi tab ini masih aktif (browser menolak menyalin bila tab sudah berpindah), baru buka WhatsApp.
+  let copied=null;
+  if(t.gambar_url){copied=await Promise.race([copyImg(t.gambar_url).then(()=>true,()=>false),new Promise(r=>setTimeout(()=>r(false),2500))])}
   const mode=waMode(),enc=encodeURIComponent(text);
   if(mode==='web')window.open('https://web.whatsapp.com/send?phone='+num+'&text='+enc,'wa_blast');
   else window.open('https://api.whatsapp.com/send?phone='+num+'&text='+enc,'_blank','noopener');
-  const copied=await cp;
   if(btn){btn.disabled=true}
   try{
     const now=new Date().toISOString(),st=c.status==='Baru'?'Dihubungi':c.status;
@@ -284,7 +285,7 @@ async function sendWa(id,btn){
     Object.assign(c,data,{potensi:+data.potensi||0});
     const tod=CUST.filter(x=>x.salesperson===c.salesperson&&sentToday(x)).length;
     const paste=mode==='web'?'tekan Ctrl+V di kolom chat':'tahan kolom pesan → Tempel';
-    const imgNote=copied===true?` Gambar sudah tersalin. Setelah chat terbuka: 1) ${paste} untuk menempel gambar, 2) tekan Kirim. Bila teks tidak ikut menjadi keterangan gambar, tekan Kirim sekali lagi untuk teksnya.`:copied===false?' Gambar tidak bisa disalin otomatis di perangkat ini, pakai tombol "Unduh gambar" lalu lampirkan manual.':'';
+    const imgNote=!t.gambar_url&&TPL.some(x=>x.aktif!==false&&x.gambar_url)?` Template "${t.judul}" tidak punya gambar, jadi pesan ini hanya teks.`:copied===true?` Gambar sudah tersalin. Setelah chat terbuka: 1) ${paste} untuk menempel gambar, 2) tekan Kirim. Bila teks tidak ikut menjadi keterangan gambar, tekan Kirim sekali lagi untuk teksnya.`:copied===false?' Gambar tidak bisa disalin otomatis di perangkat ini, pakai tombol "Unduh gambar" lalu lampirkan manual.':'';
     dlgMsg('sp-msg',tod>=DAILY_SAFE?`Pesan ke ${c.nama} tercatat. Hari ini sudah ${tod} pesan, sebaiknya berhenti dan lanjut besok supaya nomor WhatsApp tidak diblokir.${imgNote}`:`Pesan ke ${c.nama} tercatat (template "${t.judul}"). Pastikan sudah menekan Kirim di WhatsApp.${imgNote}`,tod>=DAILY_SAFE||copied===false?'err':'ok');
     render();
     return true;
@@ -381,7 +382,7 @@ $('tpl-save').addEventListener('click',async()=>{
     let r;if(TPLCUR&&TPLCUR.id){r=await SB.from('fu_templates').update(row).eq('id',TPLCUR.id).select().single()}
     else{r=await SB.from('fu_templates').insert({...row,urut:TPL.filter(t=>t.id).length}).select().single()}
     if(r.error)throw r.error;
-    if(oldPath)SB.storage.from('fu-templates').remove([oldPath]).catch(()=>{});
+    if(oldPath&&!TPL.some(x=>x.gambar_path===oldPath&&(!TPLCUR||x.id!==TPLCUR.id)))SB.storage.from('fu-templates').remove([oldPath]).catch(()=>{});
     await loadTemplates();editTpl(TPL.find(t=>t.id===r.data.id));fillTplSelect();spImg();dlgMsg('tpl-msg','Template tersimpan.','ok');
   }catch(e){dlgMsg('tpl-msg','Gagal menyimpan: '+errText(e),'err')}
   $('tpl-save').disabled=false;
@@ -393,7 +394,7 @@ $('tpl-del').addEventListener('click',async()=>{
   const gp=TPLCUR.gambar_path;
   const {error}=await SB.from('fu_templates').delete().eq('id',TPLCUR.id);
   if(error){dlgMsg('tpl-msg','Gagal menghapus: '+error.message,'err');return}
-  if(gp)SB.storage.from('fu-templates').remove([gp]).catch(()=>{});
+  if(gp&&!TPL.some(x=>x.gambar_path===gp&&x.id!==TPLCUR.id))SB.storage.from('fu-templates').remove([gp]).catch(()=>{});
   await loadTemplates();editTpl(TPL[0]);fillTplSelect();dlgMsg('tpl-msg','Template dihapus.','ok');
 });
 
