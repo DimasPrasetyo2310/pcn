@@ -149,6 +149,11 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 .tpl-list .off{color:var(--ink3);font-weight:400}
 .tpl-help{font-size:12.5px;color:var(--ink2);background:var(--tint);border-radius:9px;padding:10px 12px;margin-top:10px;line-height:1.6}
 .tpl-help code{background:#fff;border:1px solid var(--line);border-radius:5px;padding:0 4px;font-size:12px}
+.tpl-imgbox{margin-top:6px;border:1px dashed var(--frame);border-radius:10px;padding:8px;min-height:60px;display:flex;align-items:center;justify-content:center;background:var(--tint)}
+.tpl-imgbox img{max-width:100%;max-height:220px;border-radius:6px}
+#tpl-prev-img{display:block;max-width:260px;max-height:260px;border-radius:8px;margin-bottom:8px}
+.sp-img{display:flex;gap:10px;align-items:center;max-width:460px}
+.sp-img img{width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--line);flex:none}
 .tpl-preview{white-space:pre-wrap;background:#e7f7ec;border-radius:10px;padding:12px 14px;margin-top:6px;font-size:13.5px;min-height:60px}
 @media (max-width:700px){.tpl-wrap{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:600px){
@@ -248,6 +253,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
     <div id="sp-msg" class="msg" hidden></div>
     <div class="box" style="display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;justify-content:space-between">
       <div class="field" style="min-width:240px;flex:1"><label for="sp-tpl">Template pesan</label><select id="sp-tpl"></select></div>
+      <div class="sp-img" id="sp-imgwrap" hidden><img id="sp-img" alt="Gambar template"><div><div class="muted" style="font-size:12px">Gambar ikut dikirim: setelah WhatsApp terbuka, tekan <b>Ctrl+V</b> / tahan kolom pesan → <b>Tempel</b>.</div>
+        <div class="actions" style="margin-top:6px"><button type="button" class="btn sm" id="sp-img-copy">Salin gambar</button><a class="btn sm" id="sp-img-dl" download target="_blank" rel="noopener">Unduh gambar</a></div></div></div>
       <div class="sendbar"><span class="flabel">Terkirim hari ini</span><b class="num" id="sp-today">0</b><span class="muted" id="sp-limit"></span></div>
     </div>
     <div class="controls">
@@ -279,13 +286,19 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
       <div class="box" id="tpl-form">
         <div class="field"><label for="tpl-judul">Judul</label><input type="text" id="tpl-judul" placeholder="Mis. Promo akhir bulan"></div>
         <div class="field" style="margin-top:10px"><label for="tpl-isi">Isi pesan</label><textarea id="tpl-isi" style="min-height:190px"></textarea></div>
+        <div class="field" style="margin-top:10px"><span class="flabel">Gambar (opsional)</span>
+          <div class="tpl-imgbox"><img id="tpl-img" alt="Gambar template" hidden><span id="tpl-img-none" class="muted">Belum ada gambar</span></div>
+          <div class="actions" style="margin-top:6px"><button type="button" class="btn sm" id="tpl-img-pick">Pilih gambar</button><button type="button" class="btn sm danger" id="tpl-img-del" hidden>Hapus gambar</button>
+            <input type="file" id="tpl-img-file" accept="image/png,image/jpeg,image/webp" hidden></div>
+          <small class="muted">PNG/JPG/WEBP, maksimal 3 MB. Saat sales klik Kirim WA, gambar ini otomatis tersalin dan tinggal ditempel di chat.</small>
+        </div>
         <label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px"><input type="checkbox" id="tpl-aktif" checked> Aktif (ikut dipakai saat pilihan "Acak bergilir")</label>
         <div class="tpl-help">
           <b>Kode otomatis:</b> <code>{salam}</code> Selamat pagi/siang/sore/malam · <code>{nama}</code> nama customer · <code>{sales}</code> nama salesperson · <code>{member}</code> no. member · <code>{toko}</code> MITRA10 Percetakan Negara<br>
           <b>Variasi kata:</b> tulis <code>{Halo|Hai|Selamat datang}</code>, satu kata akan dipilih acak di setiap pesan, jadi pesan yang terkirim tidak identik.
         </div>
         <div class="flabel" style="margin-top:12px">Contoh hasil</div>
-        <div class="tpl-preview" id="tpl-preview"></div>
+        <div class="tpl-preview"><img id="tpl-prev-img" alt="" hidden><div id="tpl-preview"></div></div>
         <div class="row-end" style="margin-top:10px">
           <button type="button" class="btn danger" id="tpl-del" hidden>Hapus</button>
           <button type="button" class="btn" id="tpl-reroll">Contoh lain</button>
@@ -382,8 +395,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=202611261144"></script>
-<script src="js/presence.js?v=202611261144"></script>
-<script src="js/followup.js?v=202611261144"></script>
+<script src="config.js?v=202611261151"></script>
+<script src="js/presence.js?v=202611261151"></script>
+<script src="js/followup.js?v=202611261151"></script>
 </body>
 </html>

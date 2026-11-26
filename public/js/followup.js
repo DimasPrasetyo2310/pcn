@@ -163,7 +163,7 @@ function render(){
 /* ---------- Popup salesperson ---------- */
 const waIcon=()=>'<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 0 0 1.8-1.2 2.2 2.2 0 0 0 .1-1.3c0-.1-.2-.2-.5-.3z"/></svg>';
 const dSp=$('dlg-sp');
-function openSp(name){SPCUR=name;SPF={st:'',q:''};SPPAGE=0;$('sp-q').value='';dlgMsg('sp-msg','');fillTplSelect();renderSp();if(!dSp.open)dSp.showModal()}
+function openSp(name){SPCUR=name;SPF={st:'',q:''};SPPAGE=0;$('sp-q').value='';dlgMsg('sp-msg','');fillTplSelect();spImg();renderSp();if(!dSp.open)dSp.showModal()}
 function renderSp(){
   const all=CUST.filter(c=>(c.salesperson||'(tanpa salesperson)')===SPCUR);
   const sid=sidOf(SPCUR),done=all.filter(contacted).length,tod=all.filter(sentToday).length;
@@ -208,7 +208,7 @@ const DAILY_SAFE=50;
 const DEFAULT_TPL={id:0,judul:'Sapaan member (contoh)',aktif:true,isi:'{salam} {Bapak/Ibu|Kak} {nama},\n\nSaya {sales} dari {toko}. {Terima kasih sudah menjadi member kami|Terima kasih atas kepercayaannya berbelanja di tempat kami}.\n\n{Ada kebutuhan bahan bangunan atau renovasi yang bisa kami bantu?|Kalau sedang ada rencana renovasi, saya siap bantu carikan produknya.}\n\nBalas pesan ini kapan saja ya. Bila tidak ingin dihubungi lagi, cukup balas STOP.'};
 let TPL=[],TPL_DB=false,TPL_RR=0,TPLCUR=null;
 async function loadTemplates(){
-  try{const {data,error}=await SB.from('fu_templates').select('id,judul,isi,aktif,urut').order('urut',{ascending:true}).order('id',{ascending:true});
+  try{const {data,error}=await SB.from('fu_templates').select('id,judul,isi,aktif,urut,gambar_url,gambar_path').order('urut',{ascending:true}).order('id',{ascending:true});
     if(error)throw error;TPL_DB=true;TPL=data.length?data:[DEFAULT_TPL];}
   catch(e){TPL_DB=false;TPL=[DEFAULT_TPL]}
 }
@@ -231,19 +231,47 @@ function pickTpl(){
   const v=$('sp-tpl').value;if(v==='rr'){const t=act[TPL_RR%act.length];TPL_RR++;return t}
   return act.find(t=>String(t.id)===v)||act[0];
 }
+/* Gambar template: disiapkan sebagai PNG agar bisa disalin ke clipboard */
+const IMGC=new Map();
+function pngBlob(url){
+  if(IMGC.has(url))return IMGC.get(url);
+  const p=fetch(url,{mode:'cors'}).then(r=>{if(!r.ok)throw new Error('gambar tidak bisa diambil');return r.blob()}).then(b=>b.type==='image/png'?b:new Promise((res,rej)=>{
+    const im=new Image();im.crossOrigin='anonymous';im.onload=()=>{const cv=document.createElement('canvas');cv.width=im.naturalWidth;cv.height=im.naturalHeight;cv.getContext('2d').drawImage(im,0,0);cv.toBlob(x=>x?res(x):rej(new Error('konversi gagal')),'image/png')};im.onerror=()=>rej(new Error('gambar rusak'));im.src=URL.createObjectURL(b)}))
+    .then(b=>{IMGC.set(url,b);return b});
+  p.catch(()=>IMGC.delete(url));IMGC.set(url,p);return p;
+}
+const canCopyImg=()=>!!(navigator.clipboard&&navigator.clipboard.write&&window.ClipboardItem);
+function copyImg(url){
+  if(!canCopyImg())return Promise.reject(new Error('tidak didukung'));
+  const c=IMGC.get(url),data=c instanceof Blob?c:pngBlob(url);
+  return navigator.clipboard.write([new ClipboardItem({'image/png':data})]);
+}
+function spImg(){
+  const v=$('sp-tpl').value,act=TPL.filter(t=>t.aktif!==false);
+  const imgs=act.filter(t=>t.gambar_url);imgs.forEach(t=>pngBlob(t.gambar_url).catch(()=>{}));
+  const t=v==='rr'?(imgs[0]||null):act.find(x=>String(x.id)===v);
+  const w=$('sp-imgwrap');w.hidden=!(t&&t.gambar_url);
+  if(t&&t.gambar_url){$('sp-img').src=t.gambar_url;$('sp-img-dl').href=t.gambar_url;w.dataset.url=t.gambar_url}
+}
+$('sp-tpl').addEventListener('change',spImg);
+$('sp-img-copy').addEventListener('click',()=>{const u=$('sp-imgwrap').dataset.url;if(!u)return;
+  copyImg(u).then(()=>dlgMsg('sp-msg','Gambar tersalin. Tempel di chat WhatsApp dengan Ctrl+V / tahan → Tempel.','ok')).catch(()=>dlgMsg('sp-msg','Perangkat ini tidak mengizinkan menyalin gambar otomatis. Pakai tombol "Unduh gambar" lalu lampirkan manual.','err'))});
 async function sendWa(id,btn){
   const c=CUST.find(x=>x.id===id);if(!c)return;
   const num=waNum(c.hp);if(!num){dlgMsg('sp-msg','Customer ini tidak punya nomor HP yang valid.','err');return}
   const t=pickTpl(),text=renderMsg(t.isi,c,c.salesperson);
+  const cp=t.gambar_url?copyImg(t.gambar_url).then(()=>true,()=>false):Promise.resolve(null);
   window.open('https://wa.me/'+num+'?text='+encodeURIComponent(text),'_blank','noopener');
+  const copied=await cp;
   if(btn){btn.disabled=true}
   try{
     const now=new Date().toISOString(),st=c.status==='Baru'?'Dihubungi':c.status;
-    const {error:e1}=await SB.from('fu_logs').insert({customer_id:c.id,cara:'WhatsApp blast',catatan:'Template: '+t.judul+'\n\n'+text,status:st});if(e1)throw e1;
+    const {error:e1}=await SB.from('fu_logs').insert({customer_id:c.id,cara:'WhatsApp blast',catatan:'Template: '+t.judul+(t.gambar_url?' (+gambar)':'')+'\n\n'+text,status:st});if(e1)throw e1;
     const {data,error:e2}=await SB.from('fu_customers').update({status:st,last_contact:now}).eq('id',c.id).select().single();if(e2)throw e2;
     Object.assign(c,data,{potensi:+data.potensi||0});
     const tod=CUST.filter(x=>x.salesperson===c.salesperson&&sentToday(x)).length;
-    dlgMsg('sp-msg',tod>=DAILY_SAFE?`Pesan ke ${c.nama} tercatat. Hari ini sudah ${tod} pesan, sebaiknya berhenti dan lanjut besok supaya nomor WhatsApp tidak diblokir.`:`Pesan ke ${c.nama} tercatat (template "${t.judul}"). Pastikan sudah menekan Kirim di WhatsApp.`,tod>=DAILY_SAFE?'err':'ok');
+    const imgNote=copied===true?' Gambar sudah tersalin: tekan Ctrl+V (atau tahan kolom pesan → Tempel) di WhatsApp, lalu Kirim.':copied===false?' Gambar tidak bisa disalin otomatis di perangkat ini, pakai tombol "Unduh gambar" lalu lampirkan manual.':'';
+    dlgMsg('sp-msg',tod>=DAILY_SAFE?`Pesan ke ${c.nama} tercatat. Hari ini sudah ${tod} pesan, sebaiknya berhenti dan lanjut besok supaya nomor WhatsApp tidak diblokir.${imgNote}`:`Pesan ke ${c.nama} tercatat (template "${t.judul}"). Pastikan sudah menekan Kirim di WhatsApp.${imgNote}`,tod>=DAILY_SAFE||copied===false?'err':'ok');
     render();
   }catch(e){dlgMsg('sp-msg','WhatsApp terbuka, tapi gagal mencatat: '+errText(e),'err');if(btn)btn.disabled=false}
 }
@@ -254,9 +282,19 @@ function renderTplList(){
   $('tpl-list').innerHTML=TPL.map(t=>`<li><button type="button" data-t="${t.id}" aria-current="${TPLCUR&&TPLCUR.id===t.id}">${esc(t.judul)}${t.aktif===false?' <span class="off">(nonaktif)</span>':''}</button></li>`).join('');
   $('tpl-list').querySelectorAll('[data-t]').forEach(b=>b.addEventListener('click',()=>editTpl(TPL.find(t=>String(t.id)===b.dataset.t))));
 }
+let TIMG={url:'',path:'',file:null,removed:false};
+function showTplImg(){const u=TIMG.file?URL.createObjectURL(TIMG.file):(TIMG.removed?'':TIMG.url);
+  $('tpl-img').hidden=!u;$('tpl-img-none').hidden=!!u;$('tpl-prev-img').hidden=!u;$('tpl-img-del').hidden=!u||!MANAGER;if(u){$('tpl-img').src=u;$('tpl-prev-img').src=u}}
 function tplPreview(){const sp=SPCUR||MYSALES[0]||'Nama Sales';$('tpl-preview').textContent=renderMsg($('tpl-isi').value,{...SAMPLE,salesperson:sp},sp)||'(kosong)'}
+$('tpl-img-pick').addEventListener('click',()=>$('tpl-img-file').click());
+$('tpl-img-file').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+  if(!/^image\/(png|jpeg|webp)$/.test(f.type)){dlgMsg('tpl-msg','Format gambar harus PNG, JPG, atau WEBP.','err');return}
+  if(f.size>3*1024*1024){dlgMsg('tpl-msg','Ukuran gambar maksimal 3 MB.','err');return}
+  TIMG.file=f;TIMG.removed=false;showTplImg();dlgMsg('tpl-msg','Gambar dipilih. Klik "Simpan template" untuk menyimpan.','info')});
+$('tpl-img-del').addEventListener('click',()=>{TIMG.file=null;TIMG.removed=true;showTplImg();dlgMsg('tpl-msg','Gambar akan dihapus setelah Anda klik "Simpan template".','info')});
 function editTpl(t){
   TPLCUR=t||null;$('tpl-judul').value=t?t.judul:'';$('tpl-isi').value=t?t.isi:'';$('tpl-aktif').checked=t?t.aktif!==false:true;
+  TIMG={url:t&&t.gambar_url||'',path:t&&t.gambar_path||'',file:null,removed:false};$('tpl-img-pick').hidden=!MANAGER;showTplImg();
   $('tpl-del').hidden=!t||!t.id||!MANAGER;renderTplList();tplPreview();
 }
 $('btn-msgtpl').addEventListener('click',()=>{
@@ -272,11 +310,20 @@ $('tpl-save').addEventListener('click',async()=>{
   const row={judul:$('tpl-judul').value.trim(),isi:$('tpl-isi').value.trim(),aktif:$('tpl-aktif').checked};
   if(!row.judul||!row.isi){dlgMsg('tpl-msg','Judul dan isi wajib diisi.','err');return}
   $('tpl-save').disabled=true;
+  let oldPath='';
   try{
+    if(TIMG.file){
+      const ext=TIMG.file.type==='image/png'?'png':TIMG.file.type==='image/webp'?'webp':'jpg';
+      const path='template/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+      const up=await SB.storage.from('fu-templates').upload(path,TIMG.file,{contentType:TIMG.file.type,cacheControl:'31536000'});
+      if(up.error)throw up.error;
+      row.gambar_path=path;row.gambar_url=SB.storage.from('fu-templates').getPublicUrl(path).data.publicUrl;oldPath=TIMG.path;
+    }else if(TIMG.removed){row.gambar_path=null;row.gambar_url=null;oldPath=TIMG.path}
     let r;if(TPLCUR&&TPLCUR.id){r=await SB.from('fu_templates').update(row).eq('id',TPLCUR.id).select().single()}
     else{r=await SB.from('fu_templates').insert({...row,urut:TPL.filter(t=>t.id).length}).select().single()}
     if(r.error)throw r.error;
-    await loadTemplates();editTpl(TPL.find(t=>t.id===r.data.id));fillTplSelect();dlgMsg('tpl-msg','Template tersimpan.','ok');
+    if(oldPath)SB.storage.from('fu-templates').remove([oldPath]).catch(()=>{});
+    await loadTemplates();editTpl(TPL.find(t=>t.id===r.data.id));fillTplSelect();spImg();dlgMsg('tpl-msg','Template tersimpan.','ok');
   }catch(e){dlgMsg('tpl-msg','Gagal menyimpan: '+errText(e),'err')}
   $('tpl-save').disabled=false;
 });
@@ -284,8 +331,10 @@ let tplDelArm=false;
 $('tpl-del').addEventListener('click',async()=>{
   if(!TPLCUR||!TPLCUR.id)return;
   if(!tplDelArm){tplDelArm=true;$('tpl-del').textContent='Klik lagi untuk menghapus';setTimeout(()=>{tplDelArm=false;$('tpl-del').textContent='Hapus'},4000);return}
+  const gp=TPLCUR.gambar_path;
   const {error}=await SB.from('fu_templates').delete().eq('id',TPLCUR.id);
   if(error){dlgMsg('tpl-msg','Gagal menghapus: '+error.message,'err');return}
+  if(gp)SB.storage.from('fu-templates').remove([gp]).catch(()=>{});
   await loadTemplates();editTpl(TPL[0]);fillTplSelect();dlgMsg('tpl-msg','Template dihapus.','ok');
 });
 
