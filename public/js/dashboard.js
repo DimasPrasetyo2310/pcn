@@ -1178,15 +1178,6 @@ function monthRange(ym){
   const sd=((SCH&&SCH.dates)||[]).filter(d=>d.slice(0,7)===ym).sort();
   return sd.length? [sd[0],sd[sd.length-1],false] : null;
 }
-function renderUpMon(){
-  const box=$('up-mon'); if(!box) return;
-  if(canWrite===false){ box.innerHTML=''; return; }
-  const n=new Date(), ym=(y,m)=>y+'-'+String(m).padStart(2,'0');
-  const cur=ym(n.getFullYear(),n.getMonth()+1), nx=n.getMonth()===11? ym(n.getFullYear()+1,1) : ym(n.getFullYear(),n.getMonth()+2);
-  const ms=[...new Set([cur,nx,...dates.slice(-1).map(d=>d.slice(0,7))])].sort();
-  box.innerHTML=ms.map(m=>'<button type="button" class="btn" data-upmon="'+m+'" title="Hanya menerima file bulan '+MONFULL[+m.slice(5,7)-1]+' '+m.slice(0,4)+'">Unggah database '+MONFULL[+m.slice(5,7)-1]+'</button>').join('');
-}
-document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('#up-mon [data-upmon]'); if(!b) return; UPMON=b.dataset.upmon; ZEXP=null; $('file').click(); });
 function renderMonths(){
   const box=$('mon-chips'); if(!box) return;
   const ms=[...new Set([...dates,...((SCH&&SCH.dates)||[])].map(d=>d.slice(0,7)))].sort();
@@ -1194,7 +1185,7 @@ function renderMonths(){
     return '<button type="button" class="chip2 mon" data-mon="'+ym+'" aria-pressed="'+on+'" title="'+(r[2]?'Database '+MONFULL[+ym.slice(5,7)-1]+' '+ym.slice(0,4):'Baru ada jadwal & target, belum ada data penjualan')+'">'+MONFULL[+ym.slice(5,7)-1]+(r[2]?'':' (jadwal)')+'</button>'; }).join('');
 }
 document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('#mon-chips [data-mon]'); if(!b) return; const r=monthRange(b.dataset.mon); if(!r) return; if(r[2]) setRange(r[0],r[1]); else { dF.value=r[0]; dT.value=r[1]; aggregate(r[0],r[1]); all(); } });
-function all(){ renderMonths(); renderUpMon(); renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
+function all(){ renderMonths(); renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));
 $('topn').addEventListener('change',e=>{ S.topn=parseInt(e.target.value,10); renderRank(); });
@@ -1515,9 +1506,16 @@ const CKOPEN={};
 const CKMON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const ckLab=d=>(+d.slice(8))+' '+CKMON[+d.slice(5,7)-1];
 const ckDates=a=>a.length? a.slice(0,12).map(ckLab).join(', ')+(a.length>12?' dan '+(a.length-12)+' tanggal lain':'') : '';
+let CKSEL=null;
 function ckPeriod(){
   const z=n=>String(n).padStart(2,'0'), t=new Date(), today=t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate());
-  const ref=$('d-to').value||dates[dates.length-1]||today;
+  let ref=$('d-to').value||dates[dates.length-1]||today;
+  if(CKSEL){
+    const tm=today.slice(0,7), dim=new Date(+CKSEL.slice(0,4),+CKSEL.slice(5,7),0).getDate();
+    if(CKSEL<tm) ref=CKSEL+'-'+z(dim);
+    else if(CKSEL>tm) ref=CKSEL+'-01';
+    else { const md=dates.filter(d=>d.slice(0,7)===CKSEL); ref=md.length?md[md.length-1]:today; }
+  }
   return {y:+ref.slice(0,4),m:+ref.slice(5,7),day:+ref.slice(8,10),ref};
 }
 function ckItems(){
@@ -1607,7 +1605,16 @@ function renderCk(pf,it,label,sub){
     +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="'+(x.id.startsWith('z:')?x.id.slice(2):'1')+'">'+(x.id.startsWith('z:')?'Unggah jadwal zona':'Unggah file')+'</button>':'')+(x.tpl?'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh '+(x.id.startsWith('z:')?'format zona (terisi)':'template')+'</button>':'')+'</div></div></li>').join('');
   $(pf+'Sub').textContent=sub;
 }
+if($('ckPanel')&&window.MutationObserver) new MutationObserver(()=>{ if($('ckPanel').hidden&&CKSEL){ CKSEL=null; ckRefresh(); } }).observe($('ckPanel'),{attributes:true,attributeFilter:['hidden']});
+function ckMonRender(){
+  const box=$('ckMon'); if(!box) return;
+  const n=new Date(), ym=(y,m)=>y+'-'+String(m).padStart(2,'0');
+  const cur=ym(n.getFullYear(),n.getMonth()+1), nx=n.getMonth()===11? ym(n.getFullYear()+1,1) : ym(n.getFullYear(),n.getMonth()+2);
+  const ms=[...new Set([cur,nx,...dates.map(d=>d.slice(0,7))])].sort().slice(-4), sel=ckPeriod().y+'-'+String(ckPeriod().m).padStart(2,'0');
+  box.innerHTML='<span class="hint2">Pilih bulan:</span> '+ms.map(m=>'<button type="button" class="chip2" data-ckmon="'+m+'" aria-pressed="'+(m===sel)+'">'+MONFULL[+m.slice(5,7)-1]+' '+m.slice(0,4)+'</button>').join(' ');
+}
 function renderChecklist(){
+  ckMonRender();
   { const k=ckKey().join('|')+'|'+ckVer(); if(!CK.busy&&CK.key!==k&&CK.fail!==k&&typeof dbReady!=='undefined'&&dbReady) setTimeout(ckLoad,0); }
   const P=ckPeriod(), sub='Periode '+CKMON[P.m-1]+' '+P.y+', sampai '+ckLab(P.ref)+' (mengikuti tanggal "Sampai")';
   renderCk('ck',ckItems(),'Checklist database',sub);
@@ -1619,7 +1626,8 @@ document.addEventListener('click',e=>{
     if(b){ const o=$(pf+'Panel').hidden; ['ck','ab'].forEach(q=>{ if($(q+'Panel')){ $(q+'Panel').hidden=true; $(q+'Btn').setAttribute('aria-expanded','false'); } }); $(pf+'Panel').hidden=!o; b.setAttribute('aria-expanded',String(o)); return; }
   }
   const h=e.target.closest('.ckhead'); if(h){ CKOPEN[h.dataset.ck]=!CKOPEN[h.dataset.ck]; renderChecklist(); return; }
-  const u=e.target.closest('[data-up]'); if(u){ ZEXP=u.dataset.up==='1'?null:u.dataset.up; $('file').click(); return; }
+  const cm=e.target.closest('[data-ckmon]'); if(cm){ CKSEL=cm.dataset.ckmon; ckRefresh(); return; }
+  const u=e.target.closest('[data-up]'); if(u){ ZEXP=u.dataset.up==='1'?null:u.dataset.up; const P=ckPeriod(); UPMON=P.y+'-'+String(P.m).padStart(2,'0'); $('file').click(); return; }
   const t=e.target.closest('[data-tpl]'); if(t){ const it=ckItems().concat(abItems()).find(x=>x.id===t.dataset.tpl); if(it) dlTpl(it.tpl); return; }
   if(e.target.closest('#ckAll')){ dlTpl(['sales','sched']); return; }
   ['ck','ab'].forEach(pf=>{ if(!e.target.closest('#'+pf+'Panel') && $(pf+'Panel') && !$(pf+'Panel').hidden){ $(pf+'Panel').hidden=true; $(pf+'Btn').setAttribute('aria-expanded','false'); } });
