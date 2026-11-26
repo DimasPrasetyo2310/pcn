@@ -281,7 +281,7 @@ function parseMoves(XLSX, buf){
   Object.keys(moves).forEach(d=>Object.keys(moves[d]).forEach(k=>{ moves[d][k].q=Math.round(moves[d][k].q*100)/100; }));
   return {moves, used};
 }
-if(typeof module!=='undefined') module.exports = {parseReport, parseSchedule, parseZona, mergeZona, isZonaFile, parseNav, parseMoves};
+if(typeof module!=='undefined') module.exports = {parseReport, parseSchedule, parseZona, mergeZona, isZonaFile, parseNav, parseMoves, mergeSched};
 
 let P = [], M = {}, H = [], days = {}, dates = [];
 const fmtN = new Intl.NumberFormat('id-ID');
@@ -297,10 +297,29 @@ let SCH = {dates:[],people:[]}, SCHM = {}, curSel = [], lastL = [], lastHasT = f
 const isWork = c => /^[SPM](?:[\/.].*)?$/.test(String(c||''));
 // Salesperson yang sudah tidak di toko: tidak ditampilkan (tetap aman bila file jadwal di-upload ulang)
 const RESIGNED = new Set(['S10005-0000000706','S10005-0000000517','S10005-0000000704']);
+/* Menggabungkan unggahan jadwal & target baru dengan data tersimpan: bulan sebelumnya tidak hilang.
+   Tanggal digabung (unggahan baru menang untuk tanggal yang sama), orang lama tetap ada, dan target (tpd/tpm) tiap bulan disimpan di doc.th agar bulan lama tidak berubah angkanya. */
+function mergeSched(old, nw){
+  const ym = d => d.slice(0,7);
+  const od = (old && Array.isArray(old.dates)) ? old.dates : [], op = (old && Array.isArray(old.people)) ? old.people : [];
+  const th = JSON.parse(JSON.stringify((old && old.th) || {}));
+  if(op.length) [...new Set(od.map(ym))].forEach(m=>{ if(!th[m]){ th[m] = {}; op.forEach(e=>{ th[m][e.id] = [e.tpd||0, e.tpm||0]; }); } });
+  [...new Set(nw.dates.map(ym))].forEach(m=>{ th[m] = {}; nw.people.forEach(e=>{ th[m][e.id] = [e.tpd||0, e.tpm||0]; }); });
+  const dates = [...new Set([...od, ...nw.dates])].sort();
+  const oi = new Map(od.map((d,i)=>[d,i])), ni = new Map(nw.dates.map((d,i)=>[d,i]));
+  const nById = new Map(nw.people.map(e=>[e.id,e])), oById = new Map(op.map(e=>[e.id,e]));
+  const cells = (e, f) => dates.map(d => (f && ni.has(d)) ? f.c[ni.get(d)] : (e && oi.has(d) ? ((e.c||[])[oi.get(d)]||'') : ''));
+  const people = [];
+  op.forEach(e=>{ const f = nById.get(e.id); people.push(f ? Object.assign({}, e, {name:f.name||e.name, brand:f.brand, cat:f.cat, zona:f.zona||e.zona, tpd:f.tpd, tpm:f.tpm, c:cells(e,f)}) : Object.assign({}, e, {c:cells(e,null)})); });
+  nw.people.forEach(f=>{ if(!oById.has(f.id)) people.push(Object.assign({}, f, {c:cells(null,f)})); });
+  const out = Object.assign({}, nw, {dates, people, th});
+  if(old && old.zones) out.zones = old.zones;
+  return out;
+}
 function setSched(s){
   SCH = s || {dates:[],people:[]}; SCHM = {};
   if(SCH.people && SCH.people.some(e=>RESIGNED.has(e.id))) SCH = Object.assign({},SCH,{people:SCH.people.filter(e=>!RESIGNED.has(e.id))});
-  SCH.people.forEach(e=>{ const by={}; SCH.dates.forEach((d,i)=>{ by[d]=e.c[i]; }); const wdays=SCH.dates.filter((d,i)=>isWork(e.c[i])).length; SCHM[e.id]=Object.assign({},e,{by,wdays,tpe: e.tpd>0? e.tpd : (e.tpm>0? e.tpm/30 : 0)}); });
+  SCH.people.forEach(e=>{ const by={}; SCH.dates.forEach((d,i)=>{ by[d]=e.c[i]; }); const wdays=SCH.dates.filter((d,i)=>isWork(e.c[i])).length; const tf=(a)=>a&&a[0]>0? a[0] : (a&&a[1]>0? a[1]/30 : 0); const tpeM={}; Object.keys(SCH.th||{}).forEach(m=>{ const a=SCH.th[m][e.id]; if(a) tpeM[m]=tf(a); }); SCHM[e.id]=Object.assign({},e,{by,wdays,tpeM,tpe: e.tpd>0? e.tpd : (e.tpm>0? e.tpm/30 : 0)}); });
   const zs=[...new Set(SCH.people.map(e=>e.zona).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'id',{numeric:true}));
   const sel=$('zona'); if(S.zona && !zs.includes(S.zona)) S.zona='';
   sel.innerHTML='<option value="">Semua zonasi</option>'+zs.map(z=>'<option value="'+esc(z)+'"'+(z===S.zona?' selected':'')+'>'+esc(z)+'</option>').join('');
@@ -308,7 +327,7 @@ function setSched(s){
 }
 function targetOf(e,sel){
   let target=0, wd=0, cov=0;
-  sel.forEach(d=>{ const c=e.by[d]; if(!c) return; cov++; if(isWork(c)){ target+=e.tpe; wd++; } });
+  sel.forEach(d=>{ const c=e.by[d]; if(!c) return; cov++; if(isWork(c)){ const tm=e.tpeM&&e.tpeM[d.slice(0,7)]; target+=(tm!=null?tm:e.tpe); wd++; } });
   return {target:cov?target:null, wd, cov, code: sel.length===1 ? (e.by[sel[0]]||'') : ''};
 }
 function applyTargets(sel){
@@ -1683,7 +1702,7 @@ async function handleFiles(list){
       try{ r=parseReport(window.XLSX, buf, D.code); }
       catch(e){
         if(!/Receipt Date/.test(e&&e.message||'')) throw e;
-        try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); const cz=effectiveSched(); if(cz&&cz.zones) sc.zones=cz.zones; newSched=sc; continue; }catch(e2){}
+        try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); newSched=mergeSched(effectiveSched(), sc); continue; }catch(e2){}
         try{ const nv=parseNav(window.XLSX, buf); newNav=(newNav||[]).concat(nv.nav); if(nv.locs&&nv.locs.length) newLocs=(newLocs||[]).concat(nv.locs); continue; }catch(e3){}
         try{ const mm=parseMoves(window.XLSX, buf); newMoves=newMoves||{}; for(const d in mm.moves){ const t=newMoves[d]||(newMoves[d]={}); for(const k in mm.moves[d]){ const v=mm.moves[d][k]; if(t[k]){ t[k].q+=v.q; t[k].n+=v.n; } else t[k]=v; } } movRows+=mm.used; continue; }catch(e4){}
         throw new Error('format tidak dikenali (bukan Sales Detail, jadwal & target, Nota Penjualan NAV, atau Stock Movement)');
