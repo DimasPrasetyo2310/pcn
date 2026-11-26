@@ -66,7 +66,7 @@ async function loadData(){
   ]);
   CUST=c.map(r=>({...r,potensi:+r.potensi||0}));SALES=s;
   try{const {data:sd}=await SB.from('dashboard_schedule').select('doc').eq('store_code','10005').maybeSingle();
-    ZMAP=new Map(((sd&&sd.doc&&sd.doc.people)||[]).map(p=>[String(p.id||'').trim().toUpperCase(),{zona:String(p.zona||'').trim().toUpperCase(),cat:String(p.cat||'').trim().toUpperCase()}]));}catch(e){}
+    ZMAP=new Map(((sd&&sd.doc&&sd.doc.people)||[]).map(p=>[String(p.id||'').trim().toUpperCase(),{zona:String(p.zona||'').trim().toUpperCase(),cat:String(p.cat||'').trim().toUpperCase(),name:String(p.name||'').trim()}]));}catch(e){}
   MYSALES=SALES.filter(x=>x.email&&x.email.toLowerCase()===ME.toLowerCase()).map(x=>x.name);
 }
 const salesNames=()=>[...new Set([...SALES.map(s=>s.name),...CUST.map(c=>c.salesperson).filter(Boolean)])].sort((a,b)=>a.localeCompare(b,'id'));
@@ -214,10 +214,13 @@ async function loadTemplates(){
 }
 const titleCase=s=>String(s||'').toLowerCase().replace(/(^|[\s.'-])([a-z])/g,(m,a,b)=>a+b.toUpperCase()).trim();
 function salam(){const h=+new Date().toLocaleString('en-US',{hour:'numeric',hour12:false,timeZone:'Asia/Jakarta'})%24;return h<11?'Selamat pagi':h<15?'Selamat siang':h<18?'Selamat sore':'Selamat malam'}
+// Nama depan salesperson: dari nama di jadwal (lebih rapi) bila ada, kalau tidak dari nama di database
+function salesFirst(sp){const z=zinfo(sp),full=(z&&z.name)||sp||'';const w=String(full).replace(/\./g,'. ').trim().split(/\s+/).filter(Boolean);const f=w.find(x=>x.replace(/\W/g,'').length>2)||w[0]||'';return titleCase(f.replace(/\.$/,''))}
 function renderMsg(isi,c,sp){
   let t=String(isi||'');
-  const vars={salam:salam(),nama:titleCase(c.nama),sales:titleCase(sp||c.salesperson||''),member:c.member_no||'',toko:'MITRA10 Percetakan Negara'};
-  t=t.replace(/\{(salam|nama|sales|member|toko)\}/gi,(m,k)=>vars[k.toLowerCase()]);
+  sp=sp||c.salesperson||'';
+  const vars={salam:salam(),nama:titleCase(c.nama),sales:salesFirst(sp),sales_lengkap:titleCase((zinfo(sp).name)||sp),member:c.member_no||'',toko:'MITRA10 Percetakan Negara'};
+  t=t.replace(/\{(salam|nama|sales_lengkap|sales|member|toko)\}/gi,(m,k)=>vars[k.toLowerCase()]);
   for(let i=0;i<5&&/\{[^{}]*\|[^{}]*\}/.test(t);i++)t=t.replace(/\{([^{}]*\|[^{}]*)\}/g,(m,o)=>{const a=o.split('|');return a[Math.floor(Math.random()*a.length)]});
   return t.replace(/[ \t]+\n/g,'\n').trim();
 }
