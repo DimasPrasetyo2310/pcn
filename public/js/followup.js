@@ -263,6 +263,8 @@ async function sendWa(id,btn){
   const c=CUST.find(x=>x.id===id);if(!c)return;
   const num=waNum(c.hp);if(!num){dlgMsg('sp-msg','Customer ini tidak punya nomor HP yang valid.','err');return}
   const t=pickTpl(),text=renderMsg(t.isi,c,c.salesperson);
+  const ph=text.match(/\[[A-Z0-9 /.\-–]{2,}\]/g);
+  if(ph){dlgMsg('sp-msg',`Template "${t.judul}" masih berisi bagian yang belum diisi: ${[...new Set(ph)].join(', ')}. Minta admin melengkapinya di menu Template Pesan.`,'err');return}
   const cp=t.gambar_url?copyImg(t.gambar_url).then(()=>true,()=>false):Promise.resolve(null);
   window.open('https://wa.me/'+num+'?text='+encodeURIComponent(text),'_blank','noopener');
   const copied=await cp;
@@ -312,6 +314,8 @@ $('tpl-save').addEventListener('click',async()=>{
   if(!TPL_DB){dlgMsg('tpl-msg','Tabel template belum ada di database. Jalankan supabase/followup_templates.sql dulu.','err');return}
   const row={judul:$('tpl-judul').value.trim(),isi:$('tpl-isi').value.trim(),aktif:$('tpl-aktif').checked};
   if(!row.judul||!row.isi){dlgMsg('tpl-msg','Judul dan isi wajib diisi.','err');return}
+  const ph=row.isi.match(/\[[A-Z0-9 /.\-–]{2,}\]/g);
+  if(ph&&row.aktif){dlgMsg('tpl-msg','Lengkapi dulu bagian dalam kurung siku sebelum mengaktifkan: '+[...new Set(ph)].join(', ')+'. Atau hilangkan centang Aktif untuk menyimpan sebagai draf.','err');return}
   $('tpl-save').disabled=true;
   let oldPath='';
   try{
