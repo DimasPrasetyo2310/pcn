@@ -56,7 +56,8 @@ function ring(pct){
   const r=20,c=2*Math.PI*r,o=c*(1-Math.max(0,Math.min(pct,1)));
   return `<svg class="ring" viewBox="0 0 52 52" width="52" height="52" aria-hidden="true"><circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--grid)" stroke-width="6"/><circle cx="26" cy="26" r="${r}" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${c.toFixed(2)}" stroke-dashoffset="${o.toFixed(2)}" transform="rotate(-90 26 26)"/></svg>`;
 }
-const kpiHTML=k=>`<div class="kpi${k.hero?' hero':''}" data-kpi="${k.key}" tabindex="0" title="Klik untuk rincian per hari"><div class="kh">${ic(k.i)}<span class="l">${k.l}</span></div><div class="vrow"><span class="v">${k.v}</span>${k.extra||''}</div><span class="s">${k.s}</span>${k.sp?spark(k.sp):''}${k.ly||''}<div class="pk">${k.pk}</div></div>`;
+const CKBLN=m=>['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'][m-1];
+const kpiHTML=k=>`<div class="kpi${k.hero?' hero':''}${k.be?' be':''}" data-kpi="${k.key}" tabindex="0" title="Klik untuk rincian per hari"><div class="kh">${ic(k.i)}<span class="l">${k.l}</span></div><div class="vrow"><span class="v">${k.v}</span>${k.extra||''}</div><span class="s">${k.s}</span>${k.sp?spark(k.sp):''}${k.ly||''}<div class="pk">${k.pk}</div></div>`;
 
 /* ---------- Budget dan pembanding tahun lalu ---------- */
 const lyDate=d=>(+d.slice(0,4)-1)+d.slice(4);
@@ -95,12 +96,18 @@ function renderKpis(rows){
     L={cin:[sum(c.map(x=>x.cin)),sum(l.map(x=>x.cin))],tr:[sum(c.map(x=>x.tr)),sum(l.map(x=>x.tr))],nav:[sum(c.map(x=>x.sx)),sum(l.map(x=>x.sx))],d:rows[0].d,full:pr.length===rows.length};
     L.e=[L.cin[0]?L.tr[0]/L.cin[0]:0,L.cin[1]?L.tr[1]/L.cin[1]:0];L.b=[L.tr[0]?L.nav[0]/L.tr[0]:0,L.tr[1]?L.nav[1]/L.tr[1]:0];}
   const D=(k,f,o)=>L?dlt(L[k][0],L[k][1],Object.assign({d:L.d,txt:f(L[k][1])},o||{})):'';
+  // Best estimate (BE): sales exclude MTD ÷ hari berjalan × jumlah hari dalam bulan (bulan mengikuti tanggal akhir rentang)
+  const lastD=rows[rows.length-1].d, ym=lastD.slice(0,7), dayN=+lastD.slice(8,10), dim=new Date(+ym.slice(0,4),+ym.slice(5,7),0).getDate();
+  const mtdRows=DATA.D.filter(x=>x.d.slice(0,7)===ym&&x.d<=lastD).sort((x,y)=>x.d<y.d?-1:1);
+  const mtd=sum(mtdRows.map(x=>x.sx)), beV=dayN?mtd/dayN*dim:0;
+  let cum=0; const beSp=mtdRows.map(x=>{cum+=x.sx;return cum/(+x.d.slice(8,10))*dim});
   $('kpis').innerHTML=[
     {key:'cin',i:'traffic',l:'Traffic',v:nf.format(cin),s:'pengunjung masuk · rata-rata '+nf.format(Math.round(cin/n))+' per hari',sp:rows.map(d=>d.cin),ly:D('cin',nf.format),pk:'Tertinggi '+fd(pc.d)+' · '+nf.format(pc.cin)},
     {key:'tr',i:'invoice',l:'Invoice',v:nf.format(trn),s:'rata-rata '+nf.format(Math.round(trn/n))+' per hari',sp:rows.map(d=>d.tr),ly:D('tr',nf.format),pk:'Tertinggi '+fd(pt.d)+' · '+nf.format(pt.tr)},
     {key:'e',i:'target',l:'Efektivitas traffic',v:cin?dec(e*100,1)+'%':'–',extra:ring(e),s:'invoice ÷ traffic',sp:rows.map(eff),ly:D('e',v=>dec(v*100,1)+'%',{pts:1}),pk:'Tertinggi '+fd(pe.d)+' · '+dec(eff(pe)*100,1)+'%'},
     {key:'b',i:'basket',l:'Basket size',v:trn?rp(nav/trn):'–',s:'sales ÷ invoice',sp:rows.map(bsk),ly:D('b',rp),pk:'Tertinggi '+fd(pb.d)+' · '+rp(bsk(pb))},
-    {key:'nav',hero:1,i:'sales',l:'Sales',v:rp(nav),s:'exclude tax · '+rp(nav/n)+' per hari',sp:rows.map(d=>d.sx),ly:D('nav',rp),pk:'Tertinggi '+fd(ps.d)+' · '+rp(ps.sx)}
+    {key:'nav',hero:1,i:'sales',l:'Sales',v:rp(nav),s:'exclude tax · '+rp(nav/n)+' per hari',sp:rows.map(d=>d.sx),ly:D('nav',rp),pk:'Tertinggi '+fd(ps.d)+' · '+rp(ps.sx)},
+    {key:'be',be:1,i:'target',l:'BE (Best estimate)',v:rp(beV),s:'sales MTD '+rp(mtd)+' ÷ '+dayN+' hari × '+dim+' hari',sp:beSp.length>1?beSp:null,pk:'Proyeksi akhir '+CKBLN(+ym.slice(5,7))+' '+ym.slice(0,4)}
   ].map(kpiHTML).join('');
   $('lyNote').hidden=!(L&&!L.full);
   if(L&&!L.full)$('lyNote').textContent='Pembanding tahun lalu hanya tersedia untuk '+pr.length+' dari '+rows.length+' hari pada rentang ini; selisih dihitung untuk hari yang ada pembandingnya saja.';
