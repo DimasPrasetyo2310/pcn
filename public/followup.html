@@ -134,6 +134,11 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 .gate-card .sub{color:var(--ink2)}
 .acct td input{min-width:180px}
 @media (max-width:980px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi.hero{grid-column:span 2}}
+.qbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;border:1.5px dashed var(--frame);border-radius:12px;padding:12px 14px;background:var(--tint)}
+.qbar select{width:auto}
+.qpanel{border:2px solid #0b7a43;border-radius:12px;padding:12px 14px;background:#f1fbf5;display:flex;flex-direction:column;gap:10px}
+.qpanel .bar i{background:#0b7a43}
+.qrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .sendbar{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .sendbar b{font-family:var(--f-display);font-size:24px}
 .sendbar.warn b{color:var(--crit)}
@@ -257,6 +262,14 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
       <div class="sp-img" id="sp-imgwrap" hidden><img id="sp-img" alt="Gambar template"><div><div class="muted" style="font-size:12px">Gambar ikut dikirim: setelah WhatsApp terbuka, tekan <b>Ctrl+V</b> / tahan kolom pesan → <b>Tempel</b>.</div>
         <div class="actions" style="margin-top:6px"><button type="button" class="btn sm" id="sp-img-copy">Salin gambar</button><a class="btn sm" id="sp-img-dl" download target="_blank" rel="noopener">Unduh gambar</a></div></div></div>
       <div class="sendbar"><span class="flabel">Terkirim hari ini</span><b class="num" id="sp-today">0</b><span class="muted" id="sp-limit"></span></div>
+    </div>
+    <div class="qbar">
+      <div><b>Kirim beruntun</b> <span class="muted">Antrean customer "belum dihubungi" di daftar ini. Chat dibuka satu per satu dengan jeda aman 8–15 detik.</span></div>
+      <div class="actions"><select id="q-size" aria-label="Jumlah antrean"><option>10</option><option>20</option><option selected>40</option></select><button type="button" class="btn primary" id="q-start">Mulai kirim beruntun</button></div>
+    </div>
+    <div class="qpanel" id="q-panel" hidden>
+      <div class="bar" style="height:10px"><i id="q-prog" style="width:0"></i></div>
+      <div class="qrow"><div id="q-info"></div><div class="actions"><button type="button" class="btn sm wa" id="q-next">Buka chat pertama</button><button type="button" class="btn sm" id="q-skip">Lewati</button><button type="button" class="btn sm danger" id="q-stop">Berhenti</button></div></div>
     </div>
     <div class="controls">
       <div class="chips" id="sp-chips" role="group" aria-label="Filter status"></div>
@@ -396,8 +409,8 @@ dialog::backdrop{background:rgba(15,37,71,.45)}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=202611261222"></script>
-<script src="js/presence.js?v=202611261222"></script>
-<script src="js/followup.js?v=202611261222"></script>
+<script src="config.js?v=202611261231"></script>
+<script src="js/presence.js?v=202611261231"></script>
+<script src="js/followup.js?v=202611261231"></script>
 </body>
 </html>

@@ -91,7 +91,7 @@ function dueLabel(c){
 const PRI={late:0,today:1,later:2,none:3,closed:4};
 
 /* ---------- Ringkasan per salesperson ---------- */
-let SPCUR=null,SPF={st:'',q:''},SPPAGE=0;const SPPER=50;
+let SPCUR=null,SPF={st:'',q:''},SPPAGE=0,SPLAST=[];const SPPER=50;
 const jkDate=ts=>ts?new Date(ts).toLocaleDateString('sv-SE',{timeZone:'Asia/Jakarta'}):'';
 const contacted=c=>c.status!=='Baru'||!!c.last_contact;
 const sentToday=c=>!!c.last_contact&&jkDate(c.last_contact)===today();
@@ -184,6 +184,7 @@ function renderSp(){
     if(q&&!c.nama.toLowerCase().includes(q)&&!(qd.length>=3&&(digits(c.hp).includes(qd)||(c.member_no||'').includes(qd))))return false;
     return true});
   L.sort((a,b)=>(contacted(a)-contacted(b))||a.nama.localeCompare(b.nama,'id'));
+  SPLAST=L;
   const pages=Math.max(1,Math.ceil(L.length/SPPER));if(SPPAGE>=pages)SPPAGE=pages-1;
   const part=L.slice(SPPAGE*SPPER,SPPAGE*SPPER+SPPER);
   $('sp-rows').innerHTML=part.length?part.map(c=>{const wa=waNum(c.hp),st=sentToday(c);
@@ -265,11 +266,11 @@ $('sp-tpl').addEventListener('change',spImg);
 $('sp-img-copy').addEventListener('click',()=>{const u=$('sp-imgwrap').dataset.url;if(!u)return;
   copyImg(u).then(()=>dlgMsg('sp-msg','Gambar tersalin. Tempel di chat WhatsApp dengan Ctrl+V / tahan → Tempel.','ok')).catch(()=>dlgMsg('sp-msg','Perangkat ini tidak mengizinkan menyalin gambar otomatis. Pakai tombol "Unduh gambar" lalu lampirkan manual.','err'))});
 async function sendWa(id,btn){
-  const c=CUST.find(x=>x.id===id);if(!c)return;
-  const num=waNum(c.hp);if(!num){dlgMsg('sp-msg','Customer ini tidak punya nomor HP yang valid.','err');return}
+  const c=CUST.find(x=>x.id===id);if(!c)return false;
+  const num=waNum(c.hp);if(!num){dlgMsg('sp-msg','Customer ini tidak punya nomor HP yang valid.','err');return false}
   const t=pickTpl(),text=renderMsg(t.isi,c,c.salesperson);
   const ph=text.match(/\[[A-Z0-9 /.\-–]{2,}\]/g);
-  if(ph){dlgMsg('sp-msg',`Template "${t.judul}" masih berisi bagian yang belum diisi: ${[...new Set(ph)].join(', ')}. Minta admin melengkapinya di menu Template Pesan.`,'err');return}
+  if(ph){dlgMsg('sp-msg',`Template "${t.judul}" masih berisi bagian yang belum diisi: ${[...new Set(ph)].join(', ')}. Minta admin melengkapinya di menu Template Pesan.`,'err');return false}
   const cp=t.gambar_url?copyImg(t.gambar_url).then(()=>true,()=>false):Promise.resolve(null);
   const mode=waMode(),enc=encodeURIComponent(text);
   if(mode==='web')window.open('https://web.whatsapp.com/send?phone='+num+'&text='+enc,'wa_blast');
@@ -286,8 +287,51 @@ async function sendWa(id,btn){
     const imgNote=copied===true?` Gambar sudah tersalin. Setelah chat terbuka: 1) ${paste} untuk menempel gambar, 2) tekan Kirim. Bila teks tidak ikut menjadi keterangan gambar, tekan Kirim sekali lagi untuk teksnya.`:copied===false?' Gambar tidak bisa disalin otomatis di perangkat ini, pakai tombol "Unduh gambar" lalu lampirkan manual.':'';
     dlgMsg('sp-msg',tod>=DAILY_SAFE?`Pesan ke ${c.nama} tercatat. Hari ini sudah ${tod} pesan, sebaiknya berhenti dan lanjut besok supaya nomor WhatsApp tidak diblokir.${imgNote}`:`Pesan ke ${c.nama} tercatat (template "${t.judul}"). Pastikan sudah menekan Kirim di WhatsApp.${imgNote}`,tod>=DAILY_SAFE||copied===false?'err':'ok');
     render();
-  }catch(e){dlgMsg('sp-msg','WhatsApp terbuka, tapi gagal mencatat: '+errText(e),'err');if(btn)btn.disabled=false}
+    return true;
+  }catch(e){dlgMsg('sp-msg','WhatsApp terbuka, tapi gagal mencatat: '+errText(e),'err');if(btn)btn.disabled=false;return true}
 }
+/* ---------- Kirim beruntun (antrean) ----------
+   Membuka chat satu per satu dengan satu klik; sales tetap menekan Kirim sendiri di WhatsApp.
+   Ada jeda acak antar pesan agar pola pengiriman wajar dan nomor tidak ditandai spam. */
+const QGAP=[8,15];let QQ=null;
+function qRemainingToday(){const tod=CUST.filter(x=>(x.salesperson||'(tanpa salesperson)')===SPCUR&&sentToday(x)).length;return Math.max(0,DAILY_SAFE-tod)}
+function qRender(){
+  const p=$('q-panel');if(!QQ){p.hidden=true;$('q-start').disabled=false;return}
+  p.hidden=false;$('q-start').disabled=true;
+  const n=QQ.ids.length,i=QQ.i,done=i>=n,c=done?null:CUST.find(x=>x.id===QQ.ids[i]);
+  $('q-prog').style.width=(n?Math.round(i/n*100):0)+'%';
+  $('q-info').innerHTML=done?`<b>Selesai.</b> ${QQ.sent} pesan dibuka, ${QQ.skip} dilewati.`:`<b>${i+1} dari ${n}</b> · berikutnya: <b>${esc(c?c.nama:'')}</b> <span class="muted">${esc(c?c.hp||'':'')}</span>`;
+  const b=$('q-next');b.hidden=done;$('q-skip').hidden=done;
+  if(!done){const w=QQ.wait>0;b.disabled=w||QQ.busy;b.textContent=w?`Jeda aman… ${QQ.wait} dtk`:(i===0?'Buka chat pertama':'Buka chat berikutnya')}
+  $('q-stop').textContent=done?'Tutup':'Berhenti';
+}
+function qCooldown(){
+  clearInterval(QQ&&QQ.tm);if(!QQ)return;
+  QQ.wait=QGAP[0]+Math.floor(Math.random()*(QGAP[1]-QGAP[0]+1));qRender();
+  QQ.tm=setInterval(()=>{if(!QQ)return;QQ.wait--;if(QQ.wait<=0){clearInterval(QQ.tm);QQ.wait=0}qRender()},1000);
+}
+$('q-start').addEventListener('click',()=>{
+  const want=+$('q-size').value||40,left=qRemainingToday();
+  if(!left){dlgMsg('sp-msg',`Hari ini sudah ${DAILY_SAFE} pesan untuk ${SPCUR}. Lanjutkan besok supaya nomor WhatsApp tidak diblokir.`,'err');return}
+  const ids=(SPLAST.length?SPLAST:[]).filter(c=>!contacted(c)&&waNum(c.hp)).slice(0,Math.min(want,left)).map(c=>c.id);
+  if(!ids.length){dlgMsg('sp-msg','Tidak ada customer "belum dihubungi" dengan nomor HP valid di daftar ini.','info');return}
+  QQ={ids,i:0,sent:0,skip:0,wait:0,busy:false,tm:null};
+  dlgMsg('sp-msg',`Antrean ${ids.length} customer siap${ids.length<want?` (dibatasi sisa kuota aman hari ini: ${left})`:''}. Klik "Buka chat pertama". Setelah menekan Kirim di WhatsApp, kembali ke tab ini untuk chat berikutnya.`,'info');
+  qRender();
+});
+$('q-next').addEventListener('click',async()=>{
+  if(!QQ||QQ.busy||QQ.wait>0||QQ.i>=QQ.ids.length)return;
+  QQ.busy=true;qRender();
+  const ok=await sendWa(QQ.ids[QQ.i]);
+  if(!QQ)return;QQ.busy=false;
+  if(ok===false){qRender();return}
+  QQ.sent++;QQ.i++;
+  if(QQ.i<QQ.ids.length)qCooldown();else qRender();
+});
+$('q-skip').addEventListener('click',()=>{if(!QQ)return;QQ.skip++;QQ.i++;qRender()});
+$('q-stop').addEventListener('click',()=>{if(QQ)clearInterval(QQ.tm);QQ=null;qRender()});
+dSp.addEventListener('close',()=>{if(QQ)clearInterval(QQ.tm);QQ=null;qRender()});
+
 /* Kelola template */
 const dTpl=$('dlg-tpl');
 const SAMPLE={nama:'BUDI SANTOSO',member_no:'2010000000000',salesperson:''};
