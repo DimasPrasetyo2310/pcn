@@ -1605,9 +1605,11 @@ function renderCk(pf,it,label,sub){
     +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="'+(x.id.startsWith('z:')?x.id.slice(2):'1')+'">'+(x.id.startsWith('z:')?'Unggah jadwal zona':'Unggah file')+'</button>':'')+(x.tpl?'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh '+(x.id.startsWith('z:')?'format zona (terisi)':'template')+'</button>':'')+'</div></div></li>').join('');
   $(pf+'Sub').textContent=sub;
 }
-if($('ckPanel')&&window.MutationObserver) new MutationObserver(()=>{ if($('ckPanel').hidden&&CKSEL){ CKSEL=null; ckRefresh(); } }).observe($('ckPanel'),{attributes:true,attributeFilter:['hidden']});
+if(window.MutationObserver) ['ckPanel','abPanel'].forEach(id=>{ if($(id)) new MutationObserver(()=>{ if($('ckPanel').hidden&&(!$('abPanel')||$('abPanel').hidden)&&CKSEL){ CKSEL=null; ckRefresh(); } }).observe($(id),{attributes:true,attributeFilter:['hidden']}); });
 function ckMonRender(){
-  const box=$('ckMon'); if(!box) return;
+  for(const id of ['ckMon','abMon']){ const box=$(id); if(box) ckMonFill(box); }
+}
+function ckMonFill(box){
   const n=new Date(), ym=(y,m)=>y+'-'+String(m).padStart(2,'0');
   const cur=ym(n.getFullYear(),n.getMonth()+1), nx=n.getMonth()===11? ym(n.getFullYear()+1,1) : ym(n.getFullYear(),n.getMonth()+2);
   const ms=[...new Set([cur,nx,...dates.map(d=>d.slice(0,7))])].sort().slice(-4), sel=ckPeriod().y+'-'+String(ckPeriod().m).padStart(2,'0');
