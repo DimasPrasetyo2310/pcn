@@ -84,6 +84,29 @@
 #mb-cmp{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}#mb-cmp h3{margin:0 0 8px;font-size:14.5px}.cmp .cr{display:flex;justify-content:space-between;gap:10px;font-size:14px}.cmp .cbar{height:12px;background:#e6eaf2;border-radius:99px;overflow:hidden;margin:6px 0}.cmp .cbar i{display:block;height:100%;background:var(--navy);border-radius:99px}
 @media (max-width:520px){main{padding:12px 10px 32px}.card{padding:14px}table{font-size:11.5px}th{padding:8px 3px;font-size:9.5px;letter-spacing:0}td{padding:8px 3px}.tw{margin-left:-6px;margin-right:-6px}.pill{min-width:28px;padding:1px 5px}}
   .hdb{display:flex;gap:8px;flex:none}
+/* Task Follow Up Customer Daily */
+#fu-ovl .bd{color:var(--ink)}#fu-ovl label{font-size:12.5px;color:var(--ink2)}
+#fu-card .fu-badge{font-size:12px;font-weight:800;padding:4px 10px;border-radius:99px;background:#e4f4ec;color:#0e6b49;white-space:nowrap}
+#fu-card .fu-badge.full{background:#fdeae8;color:#b4271c}
+.fu-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}@media(max-width:620px){.fu-sum{grid-template-columns:1fr 1fr}}
+.fu-sum>div{border:1.5px solid #b4c1d6;border-radius:12px;padding:10px 12px;background:#fff}.fu-sum>div.hero{background:#0f2547;border-color:#0f2547;color:#fff}.fu-sum>div.hero small{color:#c8d3e6}
+.fu-sum small{display:block;font-size:11px;letter-spacing:.05em;text-transform:uppercase;font-weight:700;color:var(--ink3)}.fu-sum b{display:block;font-size:24px;font-variant-numeric:tabular-nums;margin-top:2px}
+.fu-prog{margin-top:12px}.fu-prog .bar i{background:#0b7a43}.fu-prog .row{justify-content:space-between;font-size:13px;color:var(--ink2);margin-bottom:5px}
+.fu-act{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.fu-act .btn{width:auto;margin:0;padding:11px 16px}
+.btn.wa{background:#0b7a43}.btn.wa.sent{background:#e4f4ec;color:#0e6b49}
+.fu-ctl{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);background:#f6f8fc}@media(max-width:620px){.fu-ctl{grid-template-columns:1fr}}
+.fu-ctl select,.fu-ctl input{width:100%;padding:9px 10px;border:1px solid #cdd5e3;border-radius:8px;font:inherit;font-size:14px;background:#fff}
+.fu-img{display:flex;gap:10px;align-items:center;grid-column:1/-1;font-size:12.5px;color:var(--ink2)}.fu-img img{width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.fu-q{margin:12px 16px 0;border:2px solid #0b7a43;border-radius:12px;padding:12px 14px;background:#f1fbf5}.fu-q .bar{margin:8px 0}.fu-q .bar i{background:#0b7a43}
+.fu-q .qrow{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center}.fu-q .btn{width:auto;margin:0;padding:9px 14px}
+.fu-msg{margin:10px 16px 0;padding:9px 12px;border-radius:9px;font-size:13.5px}.fu-msg.ok{background:#e4f4ec;color:#0e6b49}.fu-msg.err{background:#fdeae8;color:#b4271c}.fu-msg.info{background:#e8effc;color:#1b3a6b}
+.fu-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:12px 16px 0}.fu-tabs button{border:1px solid #cdd5e3;background:#fff;border-radius:99px;padding:6px 12px;font-size:13px}.fu-tabs button[aria-pressed="true"]{background:#0f2547;color:#fff;border-color:#0f2547;font-weight:700}
+.fu-list{padding:8px 16px 16px;display:flex;flex-direction:column;gap:8px}
+.fu-row{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;background:#fff}
+.fu-row .who b{display:block}.fu-row .who small{color:var(--ink3);font-size:12px}
+.fu-row .acts{display:flex;gap:6px;flex-wrap:wrap}.fu-row .acts button{border:1px solid #cdd5e3;background:#fff;border-radius:8px;padding:6px 10px;font-size:12.5px}
+.fu-row .acts button.wa{background:#0b7a43;border-color:#0b7a43;color:#fff;font-weight:700}.fu-row .acts button.wa.sent{background:#e4f4ec;color:#0e6b49;border-color:#b7e1c9}
+.fu-st{display:inline-block;padding:1px 8px;border-radius:99px;font-size:11.5px;font-weight:700;margin-left:6px}.fu-st.Baru{background:#e8effc;color:#1b3a6b}.fu-st.Dihubungi{background:#efe9fb;color:#4b2a8f}.fu-st.Deal{background:#e4f4ec;color:#0e6b49}.fu-st.Batal{background:#eceef2;color:#5a6476}.fu-st.Penawaran{background:#fdf1d6;color:#a86a00}
 /* Frame kartu lebih kontras */
 body{background:#e8edf5}
 .card{border:1.5px solid #aebcd3;border-top:4px solid #0f2547;box-shadow:0 1px 2px rgba(15,37,71,.12),0 10px 26px -10px rgba(15,37,71,.38)}
@@ -124,6 +147,13 @@ body{background:#e8edf5}
         <div class="stat"><small>Achievement MTD</small><div class="d" id="s-md"></div><div class="big" id="s-mp"></div><div class="bar"><i id="s-mb"></i></div><div class="n" id="s-mn"></div></div>
       </div>
 
+      <div class="card" id="fu-card" hidden>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+          <div><h2>Task Follow Up Customer Daily</h2><p class="note" style="margin:4px 0 0" id="fu-sub"></p></div>
+          <span class="fu-badge" id="fu-badge"></span>
+        </div>
+        <div id="fu-body"></div>
+      </div>
       <div class="card" id="mb-card">
         <h2>Total penjualan master brand</h2>
         <p class="note" style="margin:4px 0 0" id="mb-sub"></p>
@@ -169,6 +199,7 @@ body{background:#e8edf5}
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
   <script src="config.js"></script>
   <script src="js/shot.js"></script>
-  <script src="js/salesperson.js?v=20261124b"></script>
+  <script src="js/salesperson.js?v=202611261549"></script>
+  <script src="js/sp_followup.js?v=202611261549"></script>
 </body>
 </html>

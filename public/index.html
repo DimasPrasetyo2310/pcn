@@ -67,12 +67,19 @@ h1{font-family:var(--f-display);font-size:28px;line-height:1.15;font-weight:700;
     </a>
     <a class="item" href="followup.html">
       <span class="ic"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z"/><path d="M15 3.5a5.5 5.5 0 0 1 5.5 5.5"/><path d="M15 7a2 2 0 0 1 2 2"/></svg></span>
-      <span class="tx"><b>Follow Up Customer <span class="maint">Pemeliharaan</span></b><small>Sedang dilakukan pemeliharaan berkala. Untuk sementara hanya admin yang dapat masuk.</small></span>
+      <span class="tx"><b>Follow Up Customer <span class="maint" id="fu-maint">Pemeliharaan</span></b><small id="fu-desc">Sedang dilakukan pemeliharaan berkala. Untuk sementara hanya admin yang dapat masuk.</small></span>
       <svg class="go" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
     </a>
   </nav>
 
   <p class="foot">Anda perlu akun tim untuk masuk. Belum punya akun? Hubungi admin.</p>
 </main>
+<script src="config.js"></script>
+<script>
+// Label "Pemeliharaan" pada kartu Follow Up mengikuti pengaturan di database (fu_settings).
+(function(){var C=window.APP_CONFIG||{};if(!C.SUPABASE_URL||!C.SUPABASE_PUBLISHABLE_KEY)return;
+fetch(C.SUPABASE_URL+'/rest/v1/rpc/fu_public_status',{method:'POST',headers:{'apikey':C.SUPABASE_PUBLISHABLE_KEY,'Authorization':'Bearer '+C.SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},body:'{}'})
+.then(function(r){return r.json()}).then(function(d){if(d&&d.maintenance===false){var m=document.getElementById('fu-maint');if(m)m.remove();var t=document.getElementById('fu-desc');if(t)t.textContent='Blasting WhatsApp ke database member per salesperson, maksimal '+(d.daily_limit||40)+' customer per hari';}}).catch(function(){});})();
+</script>
 </body>
 </html>

@@ -20,8 +20,8 @@ const waNum=hp=>{let d=digits(hp);if(!d)return '';if(d.startsWith('0'))d='62'+d.
 const normHp=hp=>{const w=waNum(hp);return w.length>=8?w:''};
 const parseRp=v=>{if(typeof v==='number')return v;const d=String(v==null?'':v).replace(/[^\d,.-]/g,'').replace(/[.,](?=\d{3}(\D|$))/g,'').replace(',','.');const n=parseFloat(d);return isFinite(n)?n:0};
 
-// Selama pemeliharaan hanya admin yang bisa masuk. Ubah ke false bila sudah siap dipakai seluruh tim.
-const MAINTENANCE=true;
+// Mode pemeliharaan & batas harian diatur di tabel fu_settings (admin bisa membuka/menutup dari halaman ini).
+let MAINTENANCE=true;
 const SALES_DOMAIN='@sales.mitra10pcn.id';
 const isSalesEmail=e=>(e||'').toLowerCase().endsWith(SALES_DOMAIN);
 function idToEmail(v){v=(v||'').trim();if(!v||v.includes('@'))return v.toLowerCase();let m=v.toUpperCase().replace(/\s+/g,'');
@@ -220,7 +220,7 @@ function renderSp(){
 let spqT;$('sp-q').addEventListener('input',e=>{clearTimeout(spqT);spqT=setTimeout(()=>{SPF.q=e.target.value;SPPAGE=0;renderSp()},150)});
 
 /* ---------- Template pesan & kirim WA ---------- */
-const DAILY_SAFE=50;
+let DAILY_SAFE=40;
 const DEFAULT_TPL={id:0,judul:'Sapaan member (contoh)',aktif:true,isi:'{salam} {Bapak/Ibu|Kak} {nama},\n\nSaya {sales} dari {toko}. {Terima kasih sudah menjadi member kami|Terima kasih atas kepercayaannya berbelanja di tempat kami}.\n\n{Ada kebutuhan bahan bangunan atau renovasi yang bisa kami bantu?|Kalau sedang ada rencana renovasi, saya siap bantu carikan produknya.}\n\nBalas pesan ini kapan saja ya. Bila tidak ingin dihubungi lagi, cukup balas STOP.'};
 let TPL=[],TPL_DB=false,TPL_RR=0,TPLCUR=null;
 async function loadTemplates(){
@@ -283,6 +283,8 @@ $('sp-img-copy').addEventListener('click',()=>{const u=$('sp-imgwrap').dataset.u
 async function sendWa(id,btn){
   const c=CUST.find(x=>x.id===id);if(!c)return false;
   const num=waNum(c.hp);if(!num){dlgMsg('sp-msg','Customer ini tidak punya nomor HP yang valid.','err');return false}
+  const todN=CUST.filter(x=>x.salesperson===c.salesperson&&sentToday(x)).length;
+  if(todN>=DAILY_SAFE){dlgMsg('sp-msg',`Batas ${DAILY_SAFE} pesan per hari untuk ${c.salesperson} sudah tercapai. Lanjutkan besok.`,'err');return false}
   const t=pickTpl(),text=renderMsg(t.isi,c,c.salesperson);
   const ph=text.match(/\[[A-Z0-9 /.\-–]{2,}\]/g);
   if(ph){dlgMsg('sp-msg',`Template "${t.judul}" masih berisi bagian yang belum diisi: ${[...new Set(ph)].join(', ')}. Minta admin melengkapinya di menu Template Pesan.`,'err');return false}
@@ -631,6 +633,23 @@ $('btn-acct').addEventListener('click',async()=>{
 });
 $('a-add').addEventListener('click',async()=>{await saveAcct($('a-name').value,$('a-email').value,$('a-pass').value);$('a-name').value='';$('a-email').value='';$('a-pass').value=''});
 
+/* ---------- Mode pemeliharaan (admin) ---------- */
+let maintArm=false;
+function renderMaint(){
+  const b=$('btn-maint');if(!b)return;b.hidden=!ADMIN;
+  b.textContent=MAINTENANCE?'Buka untuk tim':'Tutup (pemeliharaan)';b.className='btn '+(MAINTENANCE?'wa':'danger');
+  if(MAINTENANCE)showMsg('Mode pemeliharaan aktif: hanya admin yang dapat membuka halaman ini, dan kartu Task Follow Up di link salesperson masih bertuliskan "pemeliharaan".','info');
+  else showMsg('Follow Up Customer sudah dibuka untuk tim: sales bisa memakai kartu Task Follow Up di link salesperson (batas '+DAILY_SAFE+' pesan per hari).','ok');
+}
+$('btn-maint').addEventListener('click',async()=>{
+  if(!maintArm){maintArm=true;$('btn-maint').textContent=MAINTENANCE?'Klik lagi: buka untuk semua sales':'Klik lagi: tutup untuk tim';setTimeout(()=>{maintArm=false;renderMaint()},4000);return}
+  maintArm=false;$('btn-maint').disabled=true;
+  const {data,error}=await SB.rpc('fu_admin_set_maintenance',{p_on:!MAINTENANCE});
+  $('btn-maint').disabled=false;
+  if(error){showMsg('Gagal mengubah status: '+errText(error),'err');return}
+  MAINTENANCE=data!==false;renderMaint();
+});
+
 /* ---------- Kontrol ---------- */
 $('f-zona').addEventListener('change',e=>{F.zona=e.target.value;renderZones();renderTable()});
 $('f-cat').addEventListener('change',e=>{F.cat=e.target.value;renderTable()});
@@ -670,9 +689,10 @@ function liveChange(p){
     const {data:roleRow}=await SB.from('user_roles').select('role').eq('user_id',session.user.id).maybeSingle();
     ROLE=roleRow?roleRow.role:'';
     MANAGER=ROLE==='admin'||ROLE==='editor';ADMIN=ROLE==='admin';
+    try{const {data:fs}=await SB.rpc('fu_public_status');if(fs){MAINTENANCE=fs.maintenance!==false;DAILY_SAFE=+fs.daily_limit||40}}catch(e){}
     if(MAINTENANCE&&!ADMIN){$('boot').querySelector('h1').textContent='Sedang dilakukan pemeliharaan berkala';bootMsg('Halaman Follow Up Customer sedang disiapkan dan untuk sementara hanya dapat dibuka oleh admin. Silakan kembali lagi nanti.',true);return}
     await Promise.all([loadData(),loadTemplates()]);
-    if(MAINTENANCE)showMsg('Mode pemeliharaan aktif: hanya admin yang dapat membuka halaman ini.','info');
+    renderMaint();
     if(!MANAGER&&!MYSALES.length){bootMsg('Akun '+ME+' belum dihubungkan ke nama salesperson. Minta admin menghubungkannya di menu Akun Salesperson.',true);return}
     $('who-name').textContent=isSalesEmail(ME)?(MYSALES[0]||'')+' · '+emailToId(ME):ME;$('who-role').textContent=MANAGER?ROLE:'sales';
     $('btn-import').hidden=!MANAGER;$('btn-tpl').hidden=!MANAGER;$('btn-acct').hidden=!ADMIN;

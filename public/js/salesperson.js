@@ -116,6 +116,7 @@ function render(r){
   $('stamp').textContent='Jadwal diunggah: '+st(r.sched_at)+' · Data penjualan diunggah: '+st(r.data_at)+' · Dimuat: '+st(new Date().toISOString());
   $('login').hidden=true;$('view').hidden=false;
   renderApprover();
+  try{window.dispatchEvent(new CustomEvent('sp:render',{detail:{key:KEY,code:CODE,id:p.id,name:p.name}}))}catch(e){}
 }
 
 

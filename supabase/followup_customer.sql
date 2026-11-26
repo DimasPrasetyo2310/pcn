@@ -174,3 +174,12 @@ create unique index if not exists fu_salespeople_sid_uq on public.fu_salespeople
 create or replace function public.fu_sales_email(p_id text) returns text language sql immutable as $$
   select lower(trim(p_id)) || '@sales.mitra10pcn.id'
 $$;
+
+-- ===== Task Follow Up di link salesperson (salesperson.html?k=KEY, tanpa login/PIN) =====
+-- Migrasi fu_salesperson_link + fu_public_status (sudah diterapkan):
+--   fu_settings(key,value): 'maintenance' (true/false), 'daily_limit' (40). Admin mengubah maintenance lewat
+--   tombol "Buka untuk tim" di followup.html (RPC fu_admin_set_maintenance). fu_public_status() dibaca anon (beranda).
+--   fu_sp_tasks(key,code)  : database customer milik kode salesperson + template aktif + jumlah terkirim hari ini.
+--   fu_sp_send(key,code,customer,template,text): catat blast; DITOLAK bila sudah daily_limit pesan hari ini (WIB).
+--   fu_sp_status(key,code,customer,status,note): ubah status ke Dihubungi/Deal/Batal.
+--   Semua RPC memeriksa key scope='sales' dan bahwa customer milik salesperson tersebut.
