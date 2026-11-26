@@ -81,9 +81,9 @@ function renderCard(){
   $('fu-body').innerHTML=`
     <div class="fu-sum">
       <div class="hero"><small>Total database</small><b>${nf.format(s.total)}</b></div>
-      <div><small>Sudah dikerjakan</small><b>${nf.format(s.done)}</b></div>
+      <div><small>Sudah terkirim</small><b>${nf.format(s.done)}</b></div>
       <div><small>Belum dihubungi</small><b>${nf.format(s.todo)}</b></div>
-      <div><small>Deal</small><b>${nf.format(s.deal)}</b></div>
+      <div><small>Terkirim hari ini</small><b>${nf.format(s.today)}</b></div>
     </div>
     <div class="fu-prog"><div class="row"><span>Target blasting hari ini</span><b>${sent} dari ${lim}</b></div><div class="bar"><i style="width:${pct}%"></i></div></div>
     <div class="fu-act">
@@ -138,7 +138,7 @@ function renderPop(){
   if(!$('fu-ovl'))return;
   const s=stats();
   $('fu-pper').textContent=`${D.sid||''} · ${nf.format(s.total)} customer · terkirim hari ini ${D.sent_today||0}/${D.limit||40}`;
-  const TB=[['todo','Belum dihubungi',s.todo],['done','Sudah dikerjakan',s.done],['today','Hari ini',s.today],['Deal','Deal',s.deal],['Batal','Batal',s.bat]];
+  const TB=[['todo','Belum dihubungi',s.todo],['done','Sudah terkirim',s.done],['today','Terkirim hari ini',s.today]];
   $('fu-tabs').innerHTML=TB.map(([v,l,n])=>`<button type="button" data-t="${v}" aria-pressed="${TAB===v}">${l} (${nf.format(n)})</button>`).join('');
   $('fu-tabs').querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;SHOW=60;renderPop()});
   renderList();renderQueue();
@@ -155,14 +155,13 @@ function filtered(){
 function renderList(){
   const L=filtered(),part=L.slice(0,SHOW),full=!left();
   $('fu-list').innerHTML=(part.length?part.map(c=>{const wa=waNum(c.hp),st=sentToday(c);
-    return `<div class="fu-row" data-id="${c.id}"><div class="who"><b>${esc(c.n)}<span class="fu-st ${esc(c.st)}">${esc(c.st)}</span></b>
-      <small>${c.m?'No. member '+esc(c.m)+' · ':''}${wa?esc(c.hp):'tanpa nomor'}${c.lc?' · dihubungi '+esc(fdt(c.lc)):''}</small></div>
-      <div class="acts">${wa?`<button type="button" class="wa${st?' sent':''}" data-wa="${c.id}"${full?' disabled title="Kuota hari ini habis"':''}>${st?'Kirim lagi':'Kirim WA'}</button>`:''}
-      ${contacted(c)?`<button type="button" data-s="Deal" data-c="${c.id}">Deal</button><button type="button" data-s="Batal" data-c="${c.id}">Batal</button>`:''}</div></div>`}).join('')
+    const done=contacted(c);
+    return `<div class="fu-row${done?' done':''}" data-id="${c.id}"><div class="who"><b>${esc(c.n)}</b>
+      <small>${c.m?'No. member '+esc(c.m)+' · ':''}${wa?esc(c.hp):'tanpa nomor'}</small></div>
+      <div class="acts">${done?`<span class="fu-sent">✓ Sudah terkirim${c.lc?' · '+esc(fdt(c.lc)):''}</span>`:(wa?`<button type="button" class="wa" data-wa="${c.id}"${full?' disabled title="Kuota hari ini habis"':''}>Kirim WA</button>`:'<span class="note" style="margin:0">Tanpa nomor HP</span>')}</div></div>`}).join('')
     :'<p class="note" style="text-align:center;padding:16px">Tidak ada customer di daftar ini.</p>')
     +(L.length>SHOW?`<button type="button" class="btn ghost" id="fu-more" style="align-self:center">Tampilkan lebih banyak (${nf.format(L.length-SHOW)} lagi)</button>`:'');
   $('fu-list').querySelectorAll('[data-wa]').forEach(b=>b.onclick=()=>send(+b.dataset.wa,b));
-  $('fu-list').querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>setStatus(+b.dataset.c,b.dataset.s,b));
   const m=$('fu-more');if(m)m.onclick=()=>{SHOW+=60;renderList()};
 }
 
