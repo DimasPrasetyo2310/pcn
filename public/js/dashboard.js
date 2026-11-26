@@ -1119,7 +1119,7 @@ let CK={rows:null,key:'',busy:false,fail:''};
 const ckVer=()=>'';
 const ckAdd=(d,n)=>{ const t=new Date(d+'T00:00:00Z'); t.setUTCDate(t.getUTCDate()+n); return t.toISOString().slice(0,10); };
 const ckWib=t=>{ if(!t) return ''; const x=new Date(t); if(isNaN(x)) return ''; return x.toLocaleString('id-ID',{timeZone:'Asia/Jakarta',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}).replace('.',':')+' WIB'; };
-function ckKey(){ const P=ckPeriod(); return [P.y+'-'+String(P.m).padStart(2,'0')+'-01',P.ref]; }
+function ckKey(){ const P=ckPeriod('ck'); return [P.y+'-'+String(P.m).padStart(2,'0')+'-01',P.ref]; }
 /*CKFETCH*/async function ckFetch(from,to){ const { data, error } = await SB.rpc('upload_checklist',{p_store:D.code,p_from:from,p_to:to}); if(error||!data||!data.ok) throw new Error(error?(error.message||error.code):'tidak ada akses'); return data.rows||[]; }/*ENDCKFETCH*/
 async function ckLoad(){
   if(CK.busy) return; const [f,t]=ckKey(), key=f+'|'+t+'|'+ckVer(); CK.busy=true; CK.fail='';
@@ -1506,20 +1506,18 @@ const CKOPEN={};
 const CKMON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const ckLab=d=>(+d.slice(8))+' '+CKMON[+d.slice(5,7)-1];
 const ckDates=a=>a.length? a.slice(0,12).map(ckLab).join(', ')+(a.length>12?' dan '+(a.length-12)+' tanggal lain':'') : '';
-let CKSEL=null;
-function ckPeriod(){
-  const z=n=>String(n).padStart(2,'0'), t=new Date(), today=t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate());
-  let ref=$('d-to').value||dates[dates.length-1]||today;
-  if(CKSEL){
-    const tm=today.slice(0,7), dim=new Date(+CKSEL.slice(0,4),+CKSEL.slice(5,7),0).getDate();
-    if(CKSEL<tm) ref=CKSEL+'-'+z(dim);
-    else if(CKSEL>tm) ref=CKSEL+'-01';
-    else { const md=dates.filter(d=>d.slice(0,7)===CKSEL); ref=md.length?md[md.length-1]:today; }
-  }
+const CKS={ck:null,ab:null};
+/* Periode checklist: selalu bulan kalender berjalan (bulan lama otomatis lepas), atau bulan berikutnya (hanya muncul 7 hari terakhir tiap bulan) untuk unggah lebih awal. Tiap checklist memilih bulan sendiri. */
+function ckPeriod(w){
+  const z=n=>String(n).padStart(2,'0'), t=new Date(), today=t.getFullYear()+'-'+z(t.getMonth()+1)+'-'+z(t.getDate()), tm=today.slice(0,7);
+  const sel=CKS[w||'ck']||tm;
+  let ref;
+  if(sel>tm) ref=sel+'-01';
+  else { const md=dates.filter(d=>d.slice(0,7)===sel); ref=md.length?md[md.length-1]:(sel===tm?today:sel+'-01'); }
   return {y:+ref.slice(0,4),m:+ref.slice(5,7),day:+ref.slice(8,10),ref};
 }
 function ckItems(){
-  const P=ckPeriod(), z=n=>String(n).padStart(2,'0'), ym=P.y+'-'+z(P.m), exp=[]; for(let i=1;i<=P.day;i++) exp.push(ym+'-'+z(i));
+  const P=ckPeriod('ck'), z=n=>String(n).padStart(2,'0'), ym=P.y+'-'+z(P.m), exp=[]; for(let i=1;i<=P.day;i++) exp.push(ym+'-'+z(i));
   const sd=new Set((SCH&&SCH.dates)||[]), hasS=!!(SCH&&SCH.people&&SCH.people.length);
   const out=[], mk=(id,title,file,bad,warn,okTxt,badTxt,lines,tpl)=>out.push({id,title,file,state:bad.length?'bad':(warn&&warn.length?'warn':'ok'),summary:bad.length?badTxt:(warn&&warn.length?warn[0]:okTxt),lines:lines.filter(Boolean),tpl});
   const miss=exp.filter(d=>!days[d]);
@@ -1553,7 +1551,7 @@ function ckItems(){
   return out;
 }
 function abItems(){
-  const P=ckPeriod(), z=n=>String(n).padStart(2,'0'), out=[];
+  const P=ckPeriod('ab'), z=n=>String(n).padStart(2,'0'), out=[];
   const mk=(id,title,file,bad,okTxt,badTxt,lines,tpl)=>out.push({id,title,file,state:bad.length?'bad':'ok',summary:bad.length?badTxt:okTxt,lines:lines.filter(Boolean),tpl});
   const exp=[]; for(let i=1;i<=P.day;i++) exp.push(P.y+'-'+z(P.m)+'-'+z(i));
   const sd=new Set((SCH&&SCH.dates)||[]), covered=exp.length&&exp.every(d=>sd.has(d)), lastI=covered?SCH.dates.indexOf(exp[exp.length-1]):-1;
@@ -1587,7 +1585,7 @@ function tplSheet(kind,y,m){
 const TPLGUIDE=[['PETUNJUK TEMPLATE UNGGAH DASHBOARD PENCAPAIAN SALESPERSON'],[''],['1. Isi hanya sheet data. Jangan ubah nama kolom di baris judul.'],['2. Sheet Petunjuk ini dilewati saat diunggah (hanya sheet pertama yang dibaca).'],['3. Sales Detail: tempel data laporan Sales Detail dari sistem di bawah baris judul. Kolom wajib: Receipt Date, Receipt No, Qty, Amount Exclude Sales, Salescode ID, Salescode Name. Store No harus 10005.'],['4. Jadwal: satu baris per salesperson. Isi kode jadwal harian (S, P, M, OFF, dst) pada kolom tanggal, lalu TARGET/DAY dan TARGET/MONTH.'],['5. Unggah lewat tombol Unggah file. Tanggal yang sudah ada akan diganti.']];
 async function dlTpl(kinds){
   if(!window.XLSX){ setStatus('Pembaca Excel belum termuat. Coba lagi sebentar.','err'); return; }
-  const P=ckPeriod(), wb=XLSX.utils.book_new();
+  const P=ckPeriod(kinds[0].startsWith('zona:')?'ab':'ck'), wb=XLSX.utils.book_new();
   kinds.forEach(k=>{ const t=tplSheet(k,P.y,P.m); XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(t.rows),t.name); });
   if(!kinds[0].startsWith('zona:')) XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(TPLGUIDE),'Petunjuk');
   const out=XLSX.write(wb,{type:'array',bookType:'xlsx'});
@@ -1605,22 +1603,20 @@ function renderCk(pf,it,label,sub){
     +'<div class="ckdet"><p>'+x.lines.map(esc2).join('</p><p>')+'</p><p class="ckf">'+x.file+'</p><div class="ckacts">'+(canWrite!==false?'<button type="button" class="ckchip" data-up="'+(x.id.startsWith('z:')?x.id.slice(2):'1')+'">'+(x.id.startsWith('z:')?'Unggah jadwal zona':'Unggah file')+'</button>':'')+(x.tpl?'<button type="button" class="ckchip" data-tpl="'+x.id+'">Unduh '+(x.id.startsWith('z:')?'format zona (terisi)':'template')+'</button>':'')+'</div></div></li>').join('');
   $(pf+'Sub').textContent=sub;
 }
-if(window.MutationObserver) ['ckPanel','abPanel'].forEach(id=>{ if($(id)) new MutationObserver(()=>{ if($('ckPanel').hidden&&(!$('abPanel')||$('abPanel').hidden)&&CKSEL){ CKSEL=null; ckRefresh(); } }).observe($(id),{attributes:true,attributeFilter:['hidden']}); });
+if(window.MutationObserver) ['ck','ab'].forEach(w=>{ if($(w+'Panel')) new MutationObserver(()=>{ if($(w+'Panel').hidden&&CKS[w]){ CKS[w]=null; if(w==='ck') ckRefresh(); else renderChecklist(); } }).observe($(w+'Panel'),{attributes:true,attributeFilter:['hidden']}); });
 function ckMonRender(){
-  for(const id of ['ckMon','abMon']){ const box=$(id); if(box) ckMonFill(box); }
-}
-function ckMonFill(box){
-  const n=new Date(), ym=(y,m)=>y+'-'+String(m).padStart(2,'0');
-  const cur=ym(n.getFullYear(),n.getMonth()+1), nx=n.getMonth()===11? ym(n.getFullYear()+1,1) : ym(n.getFullYear(),n.getMonth()+2);
-  const ms=[...new Set([cur,nx,...dates.map(d=>d.slice(0,7))])].sort().slice(-4), sel=ckPeriod().y+'-'+String(ckPeriod().m).padStart(2,'0');
-  box.innerHTML='<span class="hint2">Pilih bulan:</span> '+ms.map(m=>'<button type="button" class="chip2" data-ckmon="'+m+'" aria-pressed="'+(m===sel)+'">'+MONFULL[+m.slice(5,7)-1]+' '+m.slice(0,4)+'</button>').join(' ');
+  for(const w of ['ck','ab']){ const box=$(w+'Mon'); if(!box) continue;
+    const n=new Date(), ym=(y,m)=>y+'-'+String(m).padStart(2,'0');
+    const cur=ym(n.getFullYear(),n.getMonth()+1), nx=n.getMonth()===11? ym(n.getFullYear()+1,1) : ym(n.getFullYear(),n.getMonth()+2), sel=CKS[w]||cur;
+    box.innerHTML='<span class="hint2">Pilih bulan:</span> '+(n.getDate()>new Date(n.getFullYear(),n.getMonth()+1,0).getDate()-7?[cur,nx]:[cur]).map(m=>'<button type="button" class="chip2" data-ckmon="'+m+'" data-w="'+w+'" aria-pressed="'+(m===sel)+'">'+MONFULL[+m.slice(5,7)-1]+' '+m.slice(0,4)+'</button>').join(' ');
+  }
 }
 function renderChecklist(){
   ckMonRender();
   { const k=ckKey().join('|')+'|'+ckVer(); if(!CK.busy&&CK.key!==k&&CK.fail!==k&&typeof dbReady!=='undefined'&&dbReady) setTimeout(ckLoad,0); }
-  const P=ckPeriod(), sub='Periode '+CKMON[P.m-1]+' '+P.y+', sampai '+ckLab(P.ref)+' (mengikuti tanggal "Sampai")';
-  renderCk('ck',ckItems(),'Checklist database',sub);
-  renderCk('ab',abItems(),'Checklist absensi',sub+'. Zona yang jadwalnya sudah ada dianggap sudah input.');
+  const P1=ckPeriod('ck'), P2=ckPeriod('ab'), sb=P=>'Periode '+CKMON[P.m-1]+' '+P.y+', sampai '+ckLab(P.ref);
+  renderCk('ck',ckItems(),'Checklist database',sb(P1));
+  renderCk('ab',abItems(),'Checklist absensi',sb(P2)+'. Zona yang jadwalnya sudah ada dianggap sudah input.');
 }
 document.addEventListener('click',e=>{
   for(const pf of ['ck','ab']){
@@ -1628,8 +1624,8 @@ document.addEventListener('click',e=>{
     if(b){ const o=$(pf+'Panel').hidden; ['ck','ab'].forEach(q=>{ if($(q+'Panel')){ $(q+'Panel').hidden=true; $(q+'Btn').setAttribute('aria-expanded','false'); } }); $(pf+'Panel').hidden=!o; b.setAttribute('aria-expanded',String(o)); return; }
   }
   const h=e.target.closest('.ckhead'); if(h){ CKOPEN[h.dataset.ck]=!CKOPEN[h.dataset.ck]; renderChecklist(); return; }
-  const cm=e.target.closest('[data-ckmon]'); if(cm){ CKSEL=cm.dataset.ckmon; ckRefresh(); return; }
-  const u=e.target.closest('[data-up]'); if(u){ ZEXP=u.dataset.up==='1'?null:u.dataset.up; const P=ckPeriod(); UPMON=P.y+'-'+String(P.m).padStart(2,'0'); $('file').click(); return; }
+  const cm=e.target.closest('[data-ckmon]'); if(cm){ const w=cm.dataset.w||'ck'; const n=new Date(), cur=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); CKS[w]=cm.dataset.ckmon===cur?null:cm.dataset.ckmon; if(w==='ck') ckRefresh(); else renderChecklist(); return; }
+  const u=e.target.closest('[data-up]'); if(u){ ZEXP=u.dataset.up==='1'?null:u.dataset.up; const P=ckPeriod(u.closest('#abPanel')?'ab':'ck'); UPMON=P.y+'-'+String(P.m).padStart(2,'0'); $('file').click(); return; }
   const t=e.target.closest('[data-tpl]'); if(t){ const it=ckItems().concat(abItems()).find(x=>x.id===t.dataset.tpl); if(it) dlTpl(it.tpl); return; }
   if(e.target.closest('#ckAll')){ dlTpl(['sales','sched']); return; }
   ['ck','ab'].forEach(pf=>{ if(!e.target.closest('#'+pf+'Panel') && $(pf+'Panel') && !$(pf+'Panel').hidden){ $(pf+'Panel').hidden=true; $(pf+'Btn').setAttribute('aria-expanded','false'); } });
