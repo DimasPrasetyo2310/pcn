@@ -1171,7 +1171,21 @@ document.addEventListener('click',ev=>{ const b=ev.target.closest&&ev.target.clo
   else if(b.id==='kpop-shot'){ el=document.querySelector('#kpop .pop'); nm=DomShot.slug($('kpop-t').textContent)+(dt?'-'+dt:''); }
   else { el=document.querySelector('#pop .pop'); nm=DomShot.slug($('pop-name').textContent||'detail'); }
   if(el) DomShot(el,nm+'.png',{btn:(b.id==='mv-shot'||b.id==='sp-shot')?b:null}); });
-function all(){ renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
+const MONFULL=['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+function monthRange(ym){
+  const ds=dates.filter(d=>d.slice(0,7)===ym);
+  if(ds.length) return [ds[0],ds[ds.length-1],true];
+  const sd=((SCH&&SCH.dates)||[]).filter(d=>d.slice(0,7)===ym).sort();
+  return sd.length? [sd[0],sd[sd.length-1],false] : null;
+}
+function renderMonths(){
+  const box=$('mon-chips'); if(!box) return;
+  const ms=[...new Set([...dates,...((SCH&&SCH.dates)||[])].map(d=>d.slice(0,7)))].sort();
+  box.innerHTML=ms.map(ym=>{ const r=monthRange(ym); const on=dF.value===r[0]&&dT.value===r[1];
+    return '<button type="button" class="chip2 mon" data-mon="'+ym+'" aria-pressed="'+on+'" title="'+(r[2]?'Database '+MONFULL[+ym.slice(5,7)-1]+' '+ym.slice(0,4):'Baru ada jadwal & target, belum ada data penjualan')+'">'+MONFULL[+ym.slice(5,7)-1]+(r[2]?'':' (jadwal)')+'</button>'; }).join('');
+}
+document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('#mon-chips [data-mon]'); if(!b) return; const r=monthRange(b.dataset.mon); if(!r) return; if(r[2]) setRange(r[0],r[1]); else { dF.value=r[0]; dT.value=r[1]; aggregate(r[0],r[1]); all(); } });
+function all(){ renderMonths(); renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));
 $('topn').addEventListener('change',e=>{ S.topn=parseInt(e.target.value,10); renderRank(); });
