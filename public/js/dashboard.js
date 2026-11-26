@@ -1178,6 +1178,15 @@ function monthRange(ym){
   const sd=((SCH&&SCH.dates)||[]).filter(d=>d.slice(0,7)===ym).sort();
   return sd.length? [sd[0],sd[sd.length-1],false] : null;
 }
+function renderUpMon(){
+  const box=$('up-mon'); if(!box) return;
+  if(canWrite===false){ box.innerHTML=''; return; }
+  const n=new Date(), ym=(y,m)=>y+'-'+String(m).padStart(2,'0');
+  const cur=ym(n.getFullYear(),n.getMonth()+1), nx=n.getMonth()===11? ym(n.getFullYear()+1,1) : ym(n.getFullYear(),n.getMonth()+2);
+  const ms=[...new Set([cur,nx,...dates.slice(-1).map(d=>d.slice(0,7))])].sort();
+  box.innerHTML=ms.map(m=>'<button type="button" class="btn" data-upmon="'+m+'" title="Hanya menerima file bulan '+MONFULL[+m.slice(5,7)-1]+' '+m.slice(0,4)+'">Unggah database '+MONFULL[+m.slice(5,7)-1]+'</button>').join('');
+}
+document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('#up-mon [data-upmon]'); if(!b) return; UPMON=b.dataset.upmon; ZEXP=null; $('file').click(); });
 function renderMonths(){
   const box=$('mon-chips'); if(!box) return;
   const ms=[...new Set([...dates,...((SCH&&SCH.dates)||[])].map(d=>d.slice(0,7)))].sort();
@@ -1185,7 +1194,7 @@ function renderMonths(){
     return '<button type="button" class="chip2 mon" data-mon="'+ym+'" aria-pressed="'+on+'" title="'+(r[2]?'Database '+MONFULL[+ym.slice(5,7)-1]+' '+ym.slice(0,4):'Baru ada jadwal & target, belum ada data penjualan')+'">'+MONFULL[+ym.slice(5,7)-1]+(r[2]?'':' (jadwal)')+'</button>'; }).join('');
 }
 document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('#mon-chips [data-mon]'); if(!b) return; const r=monthRange(b.dataset.mon); if(!r) return; if(r[2]) setRange(r[0],r[1]); else { dF.value=r[0]; dT.value=r[1]; aggregate(r[0],r[1]); all(); } });
-function all(){ renderMonths(); renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
+function all(){ renderMonths(); renderUpMon(); renderSub(); renderKPI(); renderRank(); renderProt(); renderTopBrand(); renderMPP(); renderMtd(); renderSP(); mvRender(); renderTable(); renderLow(); renderFoot(); }
 document.querySelectorAll('[data-role]').forEach(b=>b.addEventListener('click',()=>{ S.role=b.dataset.role; document.querySelectorAll('[data-role]').forEach(x=>x.setAttribute('aria-pressed',x===b)); all(); }));
 document.querySelectorAll('[data-m]').forEach(b=>b.addEventListener('click',()=>{ S.m=b.dataset.m; document.querySelectorAll('[data-m]').forEach(x=>x.setAttribute('aria-pressed',x===b)); renderRank(); }));
 $('topn').addEventListener('change',e=>{ S.topn=parseInt(e.target.value,10); renderRank(); });
@@ -1671,7 +1680,7 @@ async function persist(ds, sched){
   if(!fail) await loadAll();
   return fail? dbErr(last)+' '+fail+' bagian belum tersimpan.' : '';
 }
-let ZEXP=null;
+let ZEXP=null, UPMON=null;
 async function saveZona(z, source){
   const code=D.code;
   for(let t=0;t<6;t++){
@@ -1716,11 +1725,12 @@ async function handleFiles(list){
       try{ r=parseReport(window.XLSX, buf, D.code); }
       catch(e){
         if(!/Receipt Date/.test(e&&e.message||'')) throw e;
-        try{ const sc=parseSchedule(window.XLSX, buf); sc.source=f.name; sc.uploadedAt=new Date().toISOString(); newSched=mergeSched(effectiveSched(), sc); continue; }catch(e2){}
+        try{ const sc=parseSchedule(window.XLSX, buf); if(UPMON){ const bad=sc.dates.filter(d=>d.slice(0,7)!==UPMON); if(bad.length){ notes.push('DITOLAK '+f.name+': jadwal berisi tanggal di luar '+MONFULL[+UPMON.slice(5,7)-1]+' '+UPMON.slice(0,4)+' ('+bad.length+' tanggal, mulai '+bad[0]+'). Pakai tombol bulan yang sesuai atau perbaiki file.'); continue; } } sc.source=f.name; sc.uploadedAt=new Date().toISOString(); newSched=mergeSched(effectiveSched(), sc); continue; }catch(e2){}
         try{ const nv=parseNav(window.XLSX, buf); newNav=(newNav||[]).concat(nv.nav); if(nv.locs&&nv.locs.length) newLocs=(newLocs||[]).concat(nv.locs); continue; }catch(e3){}
         try{ const mm=parseMoves(window.XLSX, buf); newMoves=newMoves||{}; for(const d in mm.moves){ const t=newMoves[d]||(newMoves[d]={}); for(const k in mm.moves[d]){ const v=mm.moves[d][k]; if(t[k]){ t[k].q+=v.q; t[k].n+=v.n; } else t[k]=v; } } movRows+=mm.used; continue; }catch(e4){}
         throw new Error('format tidak dikenali (bukan Sales Detail, jadwal & target, Nota Penjualan NAV, atau Stock Movement)');
       }
+      if(UPMON){ const out=Object.keys(r.days).filter(d=>d.slice(0,7)!==UPMON); if(out.length){ out.forEach(d=>{ delete r.days[d]; }); notes.push(f.name+': '+out.length+' hari di luar '+MONFULL[+UPMON.slice(5,7)-1]+' '+UPMON.slice(0,4)+' diabaikan ('+out.slice(0,3).join(', ')+(out.length>3?', …':'')+').'); } }
       for(const d in r.days) found[d]=Object.assign(r.days[d],{source:f.name,uploadedAt:new Date().toISOString()});
       used+=r.used;
       if(r.skippedStore) notes.push(f.name+': '+r.skippedStore+' baris dari toko lain dilewati.');
@@ -1734,7 +1744,7 @@ async function handleFiles(list){
   if(!ds.length && !newSched && !newNav && !newMoves){
     if(zres.length){ setStatus(zmsg+(notes.length?'\n'+notes.join(' '):''), zbad?'err':'ok'); }
     else setStatus('Tidak ada data yang bisa dimuat. '+notes.join(' '),'err');
-    ZEXP=null; busy=false; $('upload').disabled=false; return;
+    ZEXP=null; UPMON=null; busy=false; $('upload').disabled=false; return;
   }
   ds.forEach(d=>{ localOverlay[d]=found[d]; });
   if(newSched) localSched=newSched;
@@ -1748,7 +1758,7 @@ async function handleFiles(list){
   let err=await persist(ds, newSched);
   if(newNav||newMoves){ const e2=await persistMv(newNav,newMoves,newLocs); if(e2) err=(err?err+' ':'')+e2; MV.ver++; Object.keys(MVC).forEach(k=>delete MVC[k]); mvRender(); }
   setStatus('Dashboard diperbarui: '+parts.join('; ')+'.'+(err? ' '+err : (dbRef?' Tersimpan.':''))+(notes.length?' '+notes.join(' '):'')+(zmsg?'\n\n'+zmsg:''), err||notes.length||zbad?'warn':'ok');
-  ZEXP=null; busy=false; $('upload').disabled=false; ckRefresh();
+  ZEXP=null; UPMON=null; busy=false; $('upload').disabled=false; ckRefresh();
 }
 async function removeDate(d){
   delete localOverlay[d];
@@ -1759,7 +1769,7 @@ async function removeDate(d){
   setStatus('Data '+fd(d)+' dihapus.','ok');
   await loadAll();
 }
-$('upload').addEventListener('click',()=>{ ZEXP=null; $('file').click(); });
+$('upload').addEventListener('click',()=>{ ZEXP=null; UPMON=null; $('file').click(); });
 $('file').addEventListener('change',e=>{ handleFiles(e.target.files); e.target.value=''; });
 $('manage').addEventListener('click',()=>{ const p=$('manage-panel'); p.hidden=!p.hidden; $('manage').setAttribute('aria-expanded',String(!p.hidden)); });
 let armed=null, armT=0;
@@ -1773,7 +1783,7 @@ $('mg-body').addEventListener('click',e=>{
 const bar=$('databar');
 addEventListener('dragover',e=>{ if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){ e.preventDefault(); bar.classList.add('drag'); } });
 addEventListener('dragleave',e=>{ if(!e.relatedTarget) bar.classList.remove('drag'); });
-addEventListener('drop',e=>{ if(e.dataTransfer&&e.dataTransfer.files.length){ e.preventDefault(); bar.classList.remove('drag'); handleFiles(e.dataTransfer.files); } });
+addEventListener('drop',e=>{ if(e.dataTransfer&&e.dataTransfer.files.length){ e.preventDefault(); bar.classList.remove('drag'); UPMON=null; handleFiles(e.dataTransfer.files); } });
 dF.addEventListener('change',()=>{ if(dF.value) setRange(dF.value, dT.value||dF.value); });
 dT.addEventListener('change',()=>{ if(dT.value) setRange(dF.value||dT.value, dT.value); });
 $('d-all').addEventListener('click',()=>{ if(dates.length) setRange(dates[0],dates[dates.length-1]); });
