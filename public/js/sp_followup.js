@@ -25,7 +25,8 @@ function salam(){const h=+new Date().toLocaleString('en-US',{hour:'numeric',hour
 function firstName(full){const w=String(full||'').replace(/\./g,'. ').trim().split(/\s+/).filter(Boolean);const f=w.find(x=>x.replace(/\W/g,'').length>2)||w[0]||'';return titleCase(f.replace(/\.$/,''))}
 function renderMsg(isi,c){
   let t=String(isi||'');
-  const full=SPNAME||(D&&D.name)||'';
+  // Kode uji MASTER memakai database salesperson lain: nama di pesan memakai nama salesperson pemilik database
+  const full=(/^MASTER\b/i.test(SPNAME)?'':SPNAME)||(D&&D.name)||'';
   const v={salam:salam(),nama:titleCase(c.n),sales:firstName(full),sales_lengkap:titleCase(full),member:c.m||'',toko:'MITRA10 Percetakan Negara'};
   t=t.replace(/\{(salam|nama|sales_lengkap|sales|member|toko)\}/gi,(m,k)=>v[k.toLowerCase()]);
   for(let i=0;i<5&&/\{[^{}]*\|[^{}]*\}/.test(t);i++)t=t.replace(/\{([^{}]*\|[^{}]*)\}/g,(m,o)=>{const a=o.split('|');return a[Math.floor(Math.random()*a.length)]});
