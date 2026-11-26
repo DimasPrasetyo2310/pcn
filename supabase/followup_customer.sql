@@ -183,3 +183,7 @@ $$;
 --   fu_sp_send(key,code,customer,template,text): catat blast; DITOLAK bila sudah daily_limit pesan hari ini (WIB).
 --   fu_sp_status(key,code,customer,status,note): ubah status ke Dihubungi/Deal/Batal.
 --   Semua RPC memeriksa key scope='sales' dan bahwa customer milik salesperson tersebut.
+
+-- Migrasi fu_master_test_code: kode uji 1000 (S10005-0000001000) = salesperson "MASTER TES".
+--   sp_view_data mengizinkan kode ini walau tidak ada di jadwal; fu_sp_* untuk MASTER TES tidak terkena mode pemeliharaan.
+--   Hapus setelah uji coba: delete from fu_customers where salesperson='MASTER TES'; delete from fu_salespeople where name='MASTER TES';
