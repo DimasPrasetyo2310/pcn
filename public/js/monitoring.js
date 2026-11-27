@@ -1032,7 +1032,7 @@ async function kcSalper(days){
       if(KCRS.includes(e.id)) return;
       const tpe=e.tpd>0?e.tpd:(e.tpm>0?e.tpm/30:0); if(!(tpe>0)) return;
       let t=0,cov=0,sl=0;
-      days.forEach(d=>{const i=sch.dates.indexOf(d);if(i<0)return;cov++;if(kcWork((e.c||[])[i]))t+=tpe});
+      days.forEach(d=>{const i=sch.dates.indexOf(d);if(i<0)return;cov++;if(String((e.c||[])[i]==null?'':(e.c||[])[i]).trim()!=='')t+=tpe /* budget harian di semua hari berkode jadwal */});
       if(!cov||!(t>0)) return;
       sl=SPS.get(e.id)||0;
       n++; if(sl>=t) hi++;

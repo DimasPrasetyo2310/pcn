@@ -295,6 +295,8 @@ const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 const fd = (d,o) => new Date(d+'T00:00:00').toLocaleDateString('id-ID',o||{day:'numeric',month:'long',year:'numeric'});
 let SCH = {dates:[],people:[]}, SCHM = {}, curSel = [], lastL = [], lastHasT = false, lastSd = '', lastM = {}, lastDr = null;
 const isWork = c => /^[SPM](?:[\/.].*)?$/.test(String(c||''));
+/* Budget harian (TARGET/DAY = budget bulan / 30) berlaku di SEMUA hari yang punya kode jadwal, termasuk OFF/CT/RO, bukan hanya shift S/P/M */
+const isBud = c => String(c==null?'':c).trim()!=='';
 // Salesperson yang sudah tidak di toko: tidak ditampilkan (tetap aman bila file jadwal di-upload ulang)
 const RESIGNED = new Set(['S10005-0000000706','S10005-0000000517','S10005-0000000704']);
 /* Menggabungkan unggahan jadwal & target baru dengan data tersimpan: bulan sebelumnya tidak hilang.
@@ -327,7 +329,7 @@ function setSched(s){
 }
 function targetOf(e,sel){
   let target=0, wd=0, cov=0;
-  sel.forEach(d=>{ const c=e.by[d]; if(!c) return; cov++; if(isWork(c)){ const tm=e.tpeM&&e.tpeM[d.slice(0,7)]; target+=(tm!=null?tm:e.tpe); wd++; } });
+  sel.forEach(d=>{ const c=e.by[d]; if(!c) return; cov++; if(isBud(c)){ const tm=e.tpeM&&e.tpeM[d.slice(0,7)]; target+=(tm!=null?tm:e.tpe); } if(isWork(c)) wd++; });
   return {target:cov?target:null, wd, cov, code: sel.length===1 ? (e.by[sel[0]]||'') : ''};
 }
 function applyTargets(sel){
@@ -740,7 +742,7 @@ function lowLayout(){
   sd.forEach(d=>{ hdr.push('SHIFT','BUDGET','ACHIEV','%'); lab.push(dl(d),'','',''); });
   hdr.push('TARGET s/d '+lowTL(),'ACTUAL','ACHIEVEMENT'); lab.push('TOTAL','','');
   const rows=lowInfo.rows.map((p,k)=>{ const R=7+k, x=[p.id,p.name,p.zona||'',p.cat||''], bs=[], as=[];
-    sd.forEach((d,i)=>{ const c=LC+4*i, bC=colL(c+1)+R, aC=colL(c+2)+R; x.push(p.codes[i]||'', isWork(p.codes[i])?Math.round(p.tpd):0, null, '=IF('+bC+'>0,N('+aC+')/'+bC+',0)'); bs.push(bC); as.push(aC); });
+    sd.forEach((d,i)=>{ const c=LC+4*i, bC=colL(c+1)+R, aC=colL(c+2)+R; x.push(p.codes[i]||'', isBud(p.codes[i])?Math.round(p.tpd):0, null, '=IF('+bC+'>0,N('+aC+')/'+bC+',0)'); bs.push(bC); as.push(aC); });
     x.push('=SUM('+bs.join(',')+')','=SUM('+as.join(',')+')','=IF('+colL(T)+R+'>0,'+colL(T+1)+R+'/'+colL(T)+R+',0)');
     return x; });
   const per='MTD '+fd(lowInfo.from,{day:'numeric',month:'short'})+' sampai '+fd(lowInfo.to,{day:'numeric',month:'short',year:'numeric'});
@@ -1037,15 +1039,15 @@ function renderSP(noFetch){
     return '<td class="c" title="'+esc(who)+'">'+(ok?'<span class="spg">✓</span>':'–')+'</td>'; };
   const canAp=canWrite===true&&!noAp;
   let mB=0,mA=0,mMB=0,mCat=0,tInv=0,tBca=0,monthB=0,rows='';
-  SCH.dates.forEach((d,i)=>{ const c=e.c[i], w=isWork(c), fut=!last||d>last, b=w?e.tpe:0, a=sales[d]||0, m=dq(d);
-    if(w) monthB+=b; if(!fut){ tInv+=m.inv; tBca+=m.bca; mA+=a; mMB+=m.mb; mCat+=m.cat; if(w) mB+=b; }
+  SCH.dates.forEach((d,i)=>{ const c=e.c[i], w=isWork(c), bd=isBud(c), fut=!last||d>last, b=bd?e.tpe:0, a=sales[d]||0, m=dq(d);
+    if(bd) monthB+=b; if(!fut){ tInv+=m.inv; tBca+=m.bca; mA+=a; mMB+=m.mb; mCat+=m.cat; if(bd) mB+=b; }
     if((spShift.length&&!spShift.includes(c))||(spDate&&d!==spDate)) return;
-    const pp=(w&&b>0&&!fut)?a/b*100:null;
+    const pp=(bd&&b>0&&!fut)?a/b*100:null;
     const ap=apr[d]||{};
-    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(w?nn(b):'–')+'</td>'+(fut?'<td></td>':'<td'+(a?' class="spk" data-spd="'+d+'" title="Lihat item"':'')+'>'+nn(a)+'</td>')+'<td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td><td>'+(fut?'':m.inv)+'</td><td>'+(fut?'':m.bca)+'</td>'+(noAp?'':(fut?'<td></td><td></td>':ab('tl',d,ap,canAp&&!spMgr)+ab('mod',d,ap,canAp&&spMgr)))+'</tr>'; });
+    rows+='<tr class="'+(!w?'off':'')+'"><td>'+esc(fd(d,{weekday:'short',day:'numeric',month:'short'}))+'</td><td style="text-align:center">'+esc(c||'–')+'</td><td>'+(bd?nn(b):'–')+'</td>'+(fut?'<td></td>':'<td'+(a?' class="spk" data-spd="'+d+'" title="Lihat item"':'')+'>'+nn(a)+'</td>')+'<td class="'+cls(pp)+'"><b>'+(pp==null?'':pc(pp))+'</b></td><td>'+(fut?'':m.inv)+'</td><td>'+(fut?'':m.bca)+'</td>'+(noAp?'':(fut?'<td></td><td></td>':ab('tl',d,ap,canAp&&!spMgr)+ab('mod',d,ap,canAp&&spMgr)))+'</tr>'; });
   const mp=mB>0?mA/mB*100:null;
   rows+='<tr class="tt"><td>TOTAL s.d. '+esc(last?fd(last,{day:'numeric',month:'short'}):'-')+'</td><td></td><td>'+nn(mB)+'</td><td>'+nn(mA)+'</td><td>'+pc(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td>'+(noAp?'':'<td></td><td></td>')+'</tr>';
-  const li=SCH.dates.indexOf(last), lw=li>=0&&isWork(e.c[li]), da=last?(sales[last]||0):0, dp=(lw&&e.tpe>0)?da/e.tpe*100:null;
+  const li=SCH.dates.indexOf(last), lw=li>=0&&isBud(e.c[li]), da=last?(sales[last]||0):0, dp=(lw&&e.tpe>0)?da/e.tpe*100:null;
   const nonv=Math.max(0,mA-mMB), sh=v=>mA>0?pc(v/mA*100):'–', cn=String(e.cat||'–');
   let cmp=''; if(isPB){ const pc2=mCat>0?mMB/mCat*100:null, zl=[...ZCs].map(title).join(', '); cmp='<div class="spcmp"><b>Perbandingan Private Brand dengan Category zonasi</b> <span class="note">'+esc(e.zona||'–')+': '+esc(zl)+'</span><div class="cbar"><i style="width:'+(mCat>0?Math.min(100,mMB/mCat*100):0)+'%"></i></div><div class="note">Private Brand (Master type, hanya category zonasi) Rp '+nn(mMB)+' · Total penjualan category zonasi Rp '+nn(mCat)+' → <b>'+(pc2==null?'–':pc(pc2))+'</b> dari penjualan category zonasi.</div>'+(pbFb?'<div class="note" style="color:#a86a00">Sebagian data lama belum memuat rincian Private Brand per category, hari itu dihitung dari semua category. Upload ulang file penjualan.</div>':'')+'</div>'; }
   const mbc='<div class="spmb"><b>Total penjualan master brand</b> <span class="note">'+(last?'1 s.d. '+esc(fd(last,{day:'numeric',month:'short'})):'Belum ada data')+' · semua hari ber-penjualan dihitung, termasuk OFF/CT/RO'+(isPB?' · Private Brand = Master type brand, hanya category zonasi':'')+' · klik kartu untuk melihat item</span><div class="spmbs"><div class="spk" data-spd="K:mb" tabindex="0" role="button"><small>'+(isPB?'Private Brand (category zonasi)':'Master brand '+esc(e.brand||''))+'</small><b>Rp '+nn(mMB)+'</b><span>'+sh(mMB)+' dari total</span></div><div class="spk" data-spd="K:non" tabindex="0" role="button"><small>'+(isPB?'Non Private Brand':'Non master brand')+'</small><b>Rp '+nn(nonv)+'</b><span>'+sh(nonv)+' dari total</span></div><div class="tot spk" data-spd="K:all" tabindex="0" role="button"><small>Total penjualan</small><b>Rp '+nn(mA)+'</b><span>'+(mp==null?'':'Pencapaian '+pc(mp)+' dari budget')+'</span></div></div>'+cmp+'</div>';

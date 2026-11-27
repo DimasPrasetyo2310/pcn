@@ -6,6 +6,8 @@ let APR=null; // daftar approver (nama) untuk dropdown PIN
 const KEY=(new URLSearchParams(location.search).get('k')||'').trim();
 const $=id=>document.getElementById(id);
 const isWork=c=>/^[SPM](?:[\/.].*)?$/.test(String(c||''));
+// Budget harian (budget bulan / 30) berlaku di semua hari yang punya kode jadwal, termasuk OFF/CT/RO
+const isBud=c=>String(c==null?'':c).trim()!=='';
 const MON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const DOW=['Min','Sen','Sel','Rab','Kam','Jum','Sab'];
 const nf=new Intl.NumberFormat('id-ID',{maximumFractionDigits:0});
@@ -52,20 +54,20 @@ function render(r){
   };
   const byD={},apr={};(r.sales||[]).forEach(x=>{byD[x.d]=x});(r.appr||[]).forEach(x=>{apr[x.d]=x});
   const ck=(on,at,by)=>on?'<span class="ok" title="'+esc((by?'Disetujui oleh '+by:'Disetujui')+(at?' · '+fdl(String(at).slice(0,10)):''))+'">✓</span>'+(by?'<div class="by">'+esc(by)+'</div>':''):'<span class="na">–</span>';
-  // Penjualan pada hari non-shift (OFF, CT, RO, dll) tetap dihitung; budget hanya pada hari kerja (S, P, M)
+  // Penjualan dan budget dihitung di semua hari yang punya kode jadwal (budget harian = budget bulan / 30)
   let mB=0,mA=0,mMB=0,mCat=0,tInv=0,tBca=0,monthB=0,rows='';
   dates.forEach((d,i)=>{
     const c=p.c?p.c[i]:'';
-    const w=isWork(c);
+    const w=isWork(c), bd=isBud(c);
     const fut=!last||d>last;
-    const b=w?tpe:0;
+    const b=bd?tpe:0;
     const x=byD[d]||{},a=sales[d]||0,m=dm(x),inv=Number(x.r)||0;
-    if(w) monthB+=b;
-    if(!fut){ tInv+=inv; tBca+=m.bca; mA+=a; mMB+=m.mb; mCat+=m.cat; if(w) mB+=b; }
-    const pp=(w&&b>0&&!fut)?a/b*100:null;
+    if(bd) monthB+=b;
+    if(!fut){ tInv+=inv; tBca+=m.bca; mA+=a; mMB+=m.mb; mCat+=m.cat; if(bd) mB+=b; }
+    const pp=(bd&&b>0&&!fut)?a/b*100:null;
     const today=last&&d===last;
     const ap=apr[d]||{}, autoM=!ap.mod&&ap.tl&&pp!=null&&pp>=AUTO_MOD;
-    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(w?rp(b):'–')+'</td><td'+(fut||!a?'':' class="clk" data-d="'+d+'" title="Lihat item"')+'>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td><td>'+(fut?'':inv)+'</td><td>'+(fut?'':m.bca)+'</td><td class="c">'+(fut?'':ck(ap.tl,ap.tl_at,ap.tl_by))+'</td><td class="c">'+(fut?'':(autoM?'<span class="ok" title="Auto Approved: pencapaian harian '+esc(pct(pp))+' (≥ '+AUTO_MOD+'%)">✓</span><div class="by">Auto</div>':ck(ap.mod,ap.mod_at,ap.mod_by)))+'</td></tr>';
+    rows+='<tr class="'+(!w?'off ':'')+(fut?'fut ':'')+(today?'today':'')+'"><td>'+esc(fd(d))+'</td><td class="c"><span class="pill'+(w?' w':'')+'">'+esc(c||'–')+'</span></td><td>'+(bd?rp(b):'–')+'</td><td'+(fut||!a?'':' class="clk" data-d="'+d+'" title="Lihat item"')+'>'+(fut?'':rp(a))+'</td><td class="p '+cls(pp)+'">'+(pp==null?'':pct(pp))+'</td><td>'+(fut?'':inv)+'</td><td>'+(fut?'':m.bca)+'</td><td class="c">'+(fut?'':ck(ap.tl,ap.tl_at,ap.tl_by))+'</td><td class="c">'+(fut?'':(autoM?'<span class="ok" title="Auto Approved: pencapaian harian '+esc(pct(pp))+' (≥ '+AUTO_MOD+'%)">✓</span><div class="by">Auto</div>':ck(ap.mod,ap.mod_at,ap.mod_by)))+'</td></tr>';
   });
   const mp=mB>0?mA/mB*100:null;
   rows+='<tr class="tot"><td>TOTAL s.d. '+(last?esc(fdl(last)):'-')+'</td><td class="c"></td><td>'+rp(mB)+'</td><td>'+rp(mA)+'</td><td class="'+cls(mp)+'">'+pct(mp)+'</td><td>'+tInv+'</td><td>'+tBca+'</td><td></td><td></td></tr>';
@@ -95,7 +97,7 @@ function render(r){
 
   // Daily
   const li=last?dates.indexOf(last):-1;
-  const lw=li>=0&&isWork(p.c[li]);
+  const lw=li>=0&&isBud(p.c[li]);
   const da=last?(sales[last]||0):0;
   const dp=(lw&&tpe>0)?da/tpe*100:null;
   $('s-dd').textContent=last?fd(last):'Belum ada data';
@@ -173,7 +175,7 @@ async function initApprover(){
   try{ const {data}=await SB.rpc('sp_approvers',{p_key:KEY}); if(data&&data.ok){ APR={tl:data.tl||[],mod:data.mod||[]}; renderApprover(); } }catch(e){}
 }
 const AUTO_MOD=100; // MOD otomatis disetujui bila pencapaian harian >= 100%
-function dayPct(d){ if(!RD||!RD.p) return null; const p=RD.p, i=(RD.dates||[]).indexOf(d); if(i<0) return null; if(!isWork(p.c?p.c[i]:'')) return null; const t=p.tpd>0?p.tpd:(p.tpm>0?p.tpm/30:0); if(!(t>0)) return null; const x=(RD.sales||[]).find(y=>y.d===d); return (x?Number(x.s)||0:0)/t*100; }
+function dayPct(d){ if(!RD||!RD.p) return null; const p=RD.p, i=(RD.dates||[]).indexOf(d); if(i<0) return null; if(!isBud(p.c?p.c[i]:'')) return null; const t=p.tpd>0?p.tpd:(p.tpm>0?p.tpm/30:0); if(!(t>0)) return null; const x=(RD.sales||[]).find(y=>y.d===d); return (x?Number(x.s)||0:0)/t*100; }
 function todayWIB(){ return new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
 function apDay(){ return (RD&&RD.today)||todayWIB(); } // hari H
 function renderApprover(){
