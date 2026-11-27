@@ -280,6 +280,8 @@ function parseSheet(f,sh,sn){
     const m=new Map(), bm=new Map(), dmap=new Map(), cube=new Map();
     const hx=(...ns)=>{for(const n of ns){const i=hd.indexOf(n);if(i>=0)return i}return -1};
     const iSub=hx('Sub Category'), iFn=hx('Function'), iSf=hx('Sub Function'), iBr=hx('Brand'), iQty=hx('Qty','Quantity'), iInc=hx('Amount Include Sales','Amount Inculde Sales');
+    /* File CSV: angka bisa terbaca sebagai teks berformat ribuan ("220,720.72"); ubah ke angka agar baris tidak terbuang */
+    {const nn=v=>typeof v==='string'&&/^\s*-?[\d,]*\.?\d+\s*$/.test(v)?parseFloat(v.replace(/,/g,'')):v;for(let i=h+1;i<rows.length;i++){const r=rows[i];if(!r)continue;for(const c of [ia,iQty,iInc]){if(c>=0)r[c]=nn(r[c])}}}
     const tx=(r,i)=>i<0||r[i]==null?'':String(r[i]).trim(); let n=0,other=0;
     const iNo=hx('Item No'), iNm=hx('Item Name'), items=new Map();
     // Kategori kadang bergeser kolom (angka masuk ke kolom Category): ambil nama kategori valid dari kolom di sebelahnya
@@ -553,7 +555,7 @@ document.addEventListener('dragenter',e=>{if(canWrite&&e.dataTransfer&&[...e.dat
 document.addEventListener('dragleave',()=>{dragN=Math.max(0,dragN-1);if(!dragN)document.body.classList.remove('dropping')});
 document.addEventListener('dragover',e=>{if(canWrite&&e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault()});
 document.addEventListener('drop',e=>{if(!e.dataTransfer||!e.dataTransfer.files.length)return;e.preventDefault();dragN=0;document.body.classList.remove('dropping');
-  const f=[...e.dataTransfer.files].filter(x=>/\.xlsx?$/i.test(x.name)); if(f.length)handleFiles(f); else showMsg('Hanya file Excel (.xlsx atau .xls) yang bisa diunggah.','err')});
+  const f=[...e.dataTransfer.files].filter(x=>/\.(xlsx?|csv)$/i.test(x.name)); if(f.length)handleFiles(f); else showMsg('Hanya file Excel atau CSV (.xlsx, .xls, .csv) yang bisa diunggah.','err')});
 async function handleFiles(files){
   if(!files.length||!canWrite) return;
   if(!window.XLSX){showMsg('Pembaca Excel belum termuat. Muat ulang halaman lalu coba lagi.','err');return}
@@ -566,7 +568,11 @@ async function handleFiles(files){
 async function doUpload(files){
   showMsg('Membaca '+files.length+' file…','info');
   const ok=[],bad=[];
-  for(const f of files){try{const r=await parseFile(f);ok.push(...r);r.skipped.forEach(x=>bad.push(f.name+' / '+x))}catch(err){bad.push(f.name+': '+explain(err))}}
+  const spFiles=[];
+  for(const f of files){try{const r=await parseFile(f);ok.push(...r);r.skipped.forEach(x=>bad.push(f.name+' / '+x));
+    /* Sales Detail yang memuat Salesperson ID/Name: sekaligus memperbarui dashboard salesperson (satu kali unggah) */
+    if(window.SalesSync&&r.some(x=>x.kind==='detail'||!x.kind)){try{const b=await f.arrayBuffer();if(window.SalesSync.hasSalesperson(XLSX,b))spFiles.push({f,b})}catch(e){}}
+  }catch(err){bad.push(f.name+': '+explain(err))}}
   const parts=[];
   if(UPMON){ // batasi ke bulan yang dipilih (atau bulan yang sama tahun lalu, untuk data pembanding LY)
     const okM=d=>{const m=String(d||'').slice(0,7);return m===UPMON||m===(+UPMON.slice(0,4)-1)+UPMON.slice(4)}, ml=MONFULL[+UPMON.slice(5,7)-1]+' '+UPMON.slice(0,4);
@@ -605,6 +611,17 @@ async function doUpload(files){
             const {data}=await SB.from(t).delete().eq('store_code',STORE).in('sale_date',ds).neq('source',r.name).select('sale_date');gone+=(data||[]).length}
           if(gone) parts.push('Data lama yang digantikan dibersihkan: '+nf.format(gone)+' baris')}catch(e){}}
     }catch(err){bad.push(r.name+': '+explain(err))}
+  }
+  for(const sf of spFiles){
+    try{
+      const pr=window.SalesSync.parseReport(XLSX,sf.b,STORE), days=pr.days;
+      if(UPMON) Object.keys(days).forEach(d=>{if(d.slice(0,7)!==UPMON)delete days[d]});
+      const nd=Object.keys(days).length;
+      if(!nd){bad.push('Dashboard salesperson dari '+sf.f.name+': tidak ada hari yang sesuai bulan yang dipilih');continue}
+      const rs=await window.SalesSync.save(SB,STORE,days,sf.f.name);
+      if(rs.error) bad.push('Dashboard salesperson dari '+sf.f.name+': '+explain(rs.error)+' ('+rs.saved+' dari '+nd+' hari tersimpan)');
+      else parts.push('Dashboard salesperson ikut diperbarui: '+nd+' hari, '+nf.format(pr.used)+' baris');
+    }catch(err){bad.push('Dashboard salesperson dari '+sf.f.name+': '+explain(err))}
   }
   if(parts.length){await loadData();const r=presetRange('all');setRange(r[0],r[1])}
   const qc=parts.length?qcIssues():[]; BADNOTE.splice(0).forEach(x=>qc.push(x));
