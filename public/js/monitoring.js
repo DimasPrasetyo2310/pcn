@@ -334,12 +334,13 @@ function parseSheet(f,sh,sn){
   /* Format standar baru: PERSENTASE | TANGGAL | TRAFFIC | INVOICE | EFFECTIVE TRAFFIC | BASKET SIZE | MITRA10 PROTEKSI (baris 2 = BUDGET, data mulai baris 3) */
   h=rows.findIndex(r=>r&&String(r[0]||'').trim().toUpperCase()==='PERSENTASE'&&String(r[1]||'').trim().toUpperCase()==='TANGGAL'&&String(r[2]||'').trim().toUpperCase()==='TRAFFIC');
   if(h>=0){
-    const out=[], num=x=>typeof x==='number'&&isFinite(x)?x:null;
+    const out=[], phase=[], num=x=>typeof x==='number'&&isFinite(x)?x:null;
     rows.slice(h+1).forEach(r=>{const d=r&&toISO(r[1]);if(!d)return;
       const o={store_code:STORE,budget_date:d,traffic:num(r[2]),invoice:num(r[3]),effect:num(r[4]),basket:num(r[5]),prot_qty:num(r[6]),source:src};
-      if(d>='2000'&&(o.traffic||o.invoice||o.basket||o.prot_qty))out.push(o)});
+      if(d>='2000'&&(o.traffic||o.invoice||o.basket||o.prot_qty))out.push(o);
+      if(d>='2000'&&typeof r[0]==='number'&&isFinite(r[0]))phase.push({store_code:STORE,phase_date:d,pct:r[0],source:src})});
     if(!out.length) throw new Error('tidak ada budget traffic/invoice yang terbaca');
-    return {kind:'kpibudget',name:src,rows:out,month:out[0].budget_date.slice(0,7)};
+    return {kind:'kpibudget',name:src,rows:out,phase,month:out[0].budget_date.slice(0,7)};
   }
   h=rows.findIndex(r=>r&&String(r[0]||'').trim().toUpperCase()==='LY'&&String(r[1]||'').trim().toUpperCase()==='PERSENTASE'&&String(r[2]||'').trim().toUpperCase()==='TANGGAL');
   if(h>=0){
@@ -446,7 +447,7 @@ function ckItems(){
     [nb?'Budget '+MON[P.m-1]+' '+P.y+' tersedia untuk '+nb+' kategori.':'Budget '+MON[P.m-1]+' '+P.y+' belum ada.','Isi: target sales bulanan tiap kategori. Satu file untuk satu tahun.'],['budget']);
   const mp=all.filter(d=>!PH.has(d));
   mk('phasing','Budget harian (phasing %)','File: sheet "budget daily" (baris Tanggal dan cont %)',mp,null,'Lengkap '+dim+' hari',mp.length+' tanggal belum ada',
-    [mp.length?'Belum ada: '+dlist(mp):'Semua '+dim+' hari sudah ada.','Isi: persentase kontribusi target tiap tanggal. Jumlah sebulan = 100%.'],['phasing']);
+    [mp.length?'Belum ada: '+dlist(mp):'Semua '+dim+' hari sudah ada.','Isi: persentase kontribusi target tiap tanggal. Jumlah sebulan = 100%. Kolom PERSENTASE di file Budget KPI juga otomatis mengisi ini, jadi satu file KPI sudah cukup.'],['phasing']);
   const mk2=all.filter(d=>!KB.has(d));
   mk('kpi','Budget traffic, invoice, basket size, dan Protection BCA','File: budget traffic dan invoice (format standar: PERSENTASE, TANGGAL, TRAFFIC, INVOICE, EFFECTIVE TRAFFIC, BASKET SIZE, mitra10 proteksi; baris 2 berisi BUDGET, data mulai baris 3)',mk2,null,'Lengkap '+dim+' hari',mk2.length+' tanggal belum ada',
     [mk2.length?'Belum ada: '+dlist(mk2):'Semua '+dim+' hari sudah ada.','Isi: target harian traffic, invoice, efektivitas, basket size, dan QTY Protection. Dipakai di kartu laporan WhatsApp dan Report Closing.'],['kpi']);
@@ -461,7 +462,7 @@ function tplSheets(kind,y,m){
   if(kind==='nav') return {name:'Compare FFC NAV',rows:[['Date','Store No (NAV)','Sales Exclude Tax (NAV)','Total Transaction (NAV)','Sales Exclude Tax (FFC)','Total Transaction (FFC)','Total Counter In','Total Counter Out'],...days.map(d=>[d,STORE,null,null,null,null,null,null])]};
   if(kind==='detail') return {name:'Sales Detail',rows:[['Receipt Date','Store No','Category','Sub Category','Function','Sub Function','Master Brand','Brand','Item No','Item Name','Source Type Name','Master Type Brand','Quantity','Amount Include Sales','Amount Exclude Sales','Receipt No']]};
   if(kind==='budget'){const cats=[...new Set(DATA.C.map(c=>c[1]))].sort();return {name:'Budget '+y,rows:[['Category','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],...(cats.length?cats:['KATEGORI 1']).map(c=>[c,...Array(12).fill(null)])]}}
-  if(kind==='phasing') return {name:'Budget daily '+MON[m-1]+' '+y,rows:[[MON[m-1].toUpperCase()],['CATEGORY','Tanggal',...days.map((_,i)=>i+1)],['','cont %',...days.map(()=>null)]]};
+  if(kind==='phasing') return {name:'Budget daily '+MON[m-1]+' '+y,rows:[[MON[m-1].toUpperCase()],['CATEGORY','Tanggal',...days.map((_,i)=>i+1)],[MON[m-1].toUpperCase(),'cont %',...days.map(d=>{const v=PH.get(d);return typeof v==='number'?v:null})]]};
   const R=[['PERSENTASE','TANGGAL','TRAFFIC','INVOICE','EFFECTIVE TRAFFIC','BASKET SIZE','mitra10 proteksi'],[null,null,'BUDGET','BUDGET','BUDGET','BUDGET','BUDGET']];
   days.forEach(d=>{const ph=PH.get(d);R.push([typeof ph==='number'?ph:null,d,null,null,null,null,null])});
   return {name:'Budget KPI '+MON[m-1]+' '+y,rows:R,kpi:true};
@@ -564,7 +565,7 @@ async function doUpload(files){
     const okM=d=>{const m=String(d||'').slice(0,7);return m===UPMON||m===(+UPMON.slice(0,4)-1)+UPMON.slice(4)}, ml=MONFULL[+UPMON.slice(5,7)-1]+' '+UPMON.slice(0,4);
     for(const r of ok){
       const fl=(a,k)=>Array.isArray(a)?a.filter(x=>okM(x[k])):a;
-      if(r.kind==='nav'||r.kind==='phasing'||r.kind==='kpibudget'){const k=r.kind==='nav'?'sale_date':r.kind==='phasing'?'phase_date':'budget_date',n0=r.rows.length;r.rows=fl(r.rows,k);if(n0-r.rows.length)bad.push(r.name+': '+(n0-r.rows.length)+' hari di luar '+ml+' diabaikan')}
+      if(r.kind==='nav'||r.kind==='phasing'||r.kind==='kpibudget'){const k=r.kind==='nav'?'sale_date':r.kind==='phasing'?'phase_date':'budget_date',n0=r.rows.length;r.rows=fl(r.rows,k);if(r.phase)r.phase=fl(r.phase,'phase_date');if(n0-r.rows.length)bad.push(r.name+': '+(n0-r.rows.length)+' hari di luar '+ml+' diabaikan')}
       else if(r.kind==='detail'||!r.kind){const n0=new Set((r.rows||[]).map(x=>x.sale_date)).size;['rows','items','cube','dims','brands','members'].forEach(a=>{if(r[a])r[a]=fl(r[a],'sale_date')});const n1=new Set((r.rows||[]).map(x=>x.sale_date)).size;if(n0-n1)bad.push(r.name+': '+(n0-n1)+' hari di luar '+ml+' diabaikan')}
     }
     for(let i=ok.length-1;i>=0;i--){const r=ok[i];if((r.kind==='nav'||r.kind==='phasing'||r.kind==='kpibudget'||r.kind==='detail')&&!(r.rows||[]).length)ok.splice(i,1)}
@@ -579,7 +580,7 @@ async function doUpload(files){
         const {error:e1}=await SB.from('store_pareto_member').delete().eq('store_code',STORE).lt('uploaded_at',stamp);if(e1)throw e1;
         parts.push('Database member pareto: '+nf.format(r.rows.length)+' member (daftar lama diganti)');PARC.clear()}
       else if(r.kind==='budget'){await upsertChunks('store_budget_monthly',r.rows,'store_code,year,month,category');parts.push('Budget '+r.year+': '+r.rows.length+' angka bulanan')}
-      else if(r.kind==='kpibudget'){await upsertChunks('store_budget_kpi_daily',r.rows,'store_code,budget_date');parts.push('Budget traffic, invoice, basket, protection '+r.month+': '+r.rows.length+' hari')}
+      else if(r.kind==='kpibudget'){await upsertChunks('store_budget_kpi_daily',r.rows,'store_code,budget_date');if(r.phase&&r.phase.length){await upsertChunks('store_budget_phasing',r.phase,'store_code,phase_date');parts.push('Budget harian (persentase) '+r.month+': '+r.phase.length+' hari, ikut dari file budget KPI')}parts.push('Budget traffic, invoice, basket, protection '+r.month+': '+r.rows.length+' hari')}
       else if(r.kind==='phasing'){await upsertChunks('store_budget_phasing',r.rows,'store_code,phase_date');parts.push('Budget harian '+r.month+': '+r.rows.length+' hari')}
       else{
         const same=await unchangedDates(r), keep=x=>!same.has(x.sale_date), total=new Set(r.rows.map(x=>x.sale_date)).size;
