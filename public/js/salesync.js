@@ -98,7 +98,7 @@ function parseReport(XLSX, buf, storeCode){
     p.cats[cat] = (p.cats[cat]||0)+amt;
     const mb = String(get(r,'master brand')).trim().toUpperCase() || 'LAINNYA';
     p.brands[mb] = (p.brands[mb]||0)+amt;
-    { const ino=String(get(r,'item no')).trim(), idesc=clean(get(r,'item name')), ik=ino||idesc; const ie=p.it[ik]||(p.it[ik]=[cat,mb,ino,idesc,0,0]); ie[4]+=num(get(r,'qty')); ie[5]+=amt; if(/^private brand$/i.test(String(get(r,'master type brand')).trim())) ie[6]=1; }
+    { const ino=itemNo10(get(r,'item no')), idesc=clean(get(r,'item name')), ik=ino||idesc; const ie=p.it[ik]||(p.it[ik]=[cat,mb,ino,idesc,0,0]); ie[4]+=num(get(r,'qty')); ie[5]+=amt; if(/^private brand$/i.test(String(get(r,'master type brand')).trim())) ie[6]=1; }
     mvAdd(p.mv, r);
     if(/^private brand$/i.test(String(get(r,'master type brand')).trim())){ p.pb += amt; p.pbc[cat]=(p.pbc[cat]||0)+amt; }
   }
