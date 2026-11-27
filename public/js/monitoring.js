@@ -357,7 +357,7 @@ function badRowsNote(src,b,a){BADNOTE.push(src+': '+nf.format(b)+' dari '+nf.for
 async function parseFile(f){
   const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false});
   const ok=[],bad=[];
-  wb.SheetNames.forEach(sn=>{try{ok.push(parseSheet(f,wb.Sheets[sn],sn))}catch(err){bad.push(sn+': '+explain(err))}});
+  wb.SheetNames.filter(sn=>!/^petunjuk$/i.test(String(sn).trim())).forEach(sn=>{try{ok.push(parseSheet(f,wb.Sheets[sn],sn))}catch(err){bad.push(sn+': '+explain(err))}});
   if(!ok.length) throw new Error(bad.length===1?bad[0]:'tidak ada sheet yang dikenali ('+bad.join('; ')+')');
   ok.skipped=bad;
   return ok;
