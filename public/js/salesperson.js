@@ -15,6 +15,9 @@ const rp=n=>nf.format(Math.round(n||0));
 const fd=iso=>{const d=new Date(iso+'T00:00:00');return DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]};
 const fdl=iso=>{const d=new Date(iso+'T00:00:00');return d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()};
 const cls=p=>p==null?'na':p>=100?'gd':p>=75?'am':'bd';
+// Ikon status: piala = tercapai, tanda seru = kuning (75–99%), api = merah (< 75%)
+const ico=p=>{const c=cls(p);return c==='gd'?'🏆':c==='am'?'❗':c==='bd'?'🔥':'';};
+const bigHtml=p=>{const i=ico(p);return esc(p==null?'–':pct(p))+(i?'<span class="ic" aria-hidden="true">'+i+'</span>':'');};
 const pct=p=>p==null?'–':(Math.round(p*10)/10).toString().replace('.',',')+'%';
 const SKEY='sp_code_'+KEY;
 let CODE='',timer=null,RD=null;
@@ -101,18 +104,23 @@ function render(r){
   const da=last?(sales[last]||0):0;
   const dp=(lw&&tpe>0)?da/tpe*100:null;
   $('s-dd').textContent=last?fd(last):'Belum ada data';
-  $('s-dp').textContent=dp==null?'–':pct(dp);
+  $('s-dp').innerHTML=bigHtml(dp);
   $('s-dp').className='big clk '+cls(dp);
   $('s-db').style.width=Math.min(100,Math.max(0,dp||0))+'%';
   $('s-db').className=cls(dp);
   $('s-dn').textContent=last?(lw?('Actual Rp '+rp(da)+' dari budget Rp '+rp(tpe)):'Hari non-shift (OFF/CT/RO dll), tidak ada budget · penjualan Rp '+rp(da)+' tetap dihitung di MTD'):'';
   // MTD
   $('s-md').textContent=last?('1 s.d. '+fdl(last)):'Belum ada data';
-  $('s-mp').textContent=pct(mp);
+  $('s-mp').innerHTML=bigHtml(mp);
   $('s-mp').className='big clk '+cls(mp);
   $('s-mb').style.width=Math.min(100,Math.max(0,mp||0))+'%';
   $('s-mb').className=cls(mp);
   $('s-mn').textContent='Actual Rp '+rp(mA)+' dari budget Rp '+rp(mB);
+  // Selisih actual MTD vs budget MTD: merah jika kurang, hijau jika sudah tercapai
+  { const g=$('s-mg'), gp=mA-mB;
+    if(!(mB>0)){ g.hidden=true; }
+    else { g.hidden=false; g.className='gap '+(gp<0?'neg':'pos');
+      g.innerHTML=gp<0?'<small>Kurang dari budget MTD</small>🔥 −Rp '+rp(-gp):'<small>Sudah achieve, lebih dari budget MTD</small>🏆 +Rp '+rp(gp); } }
 
   const st=t=>{if(!t)return '–';const d=new Date(t);return isNaN(d)?'–':d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()+', '+String(d.getHours()).padStart(2,'0')+'.'+String(d.getMinutes()).padStart(2,'0')};
   $('stamp').textContent='Jadwal diunggah: '+st(r.sched_at)+' · Data penjualan diunggah: '+st(r.data_at)+' · Dimuat: '+st(new Date().toISOString());

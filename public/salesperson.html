@@ -56,6 +56,10 @@
     .bar i{display:block;height:100%;border-radius:99px}
     .stat .n{margin-top:8px;font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums}
     .gd{color:var(--gd)}.am{color:var(--am)}.bd{color:var(--bd)}.na{color:var(--ink3)}.ok{color:var(--gd);font-weight:800;font-size:16px}
+    .stat .big .ic{font-size:.62em;vertical-align:.12em;margin-left:8px}
+    .stat .gap{margin:10px 0 0;padding:9px 12px;border-radius:10px;font-size:22px;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums}
+    .stat .gap small{display:block;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;margin-bottom:2px;color:inherit;opacity:.8}
+    .stat .gap.neg{color:var(--bd);background:#fdecea;border:1px solid #f3b8b2}.stat .gap.pos{color:var(--gd);background:#e7f6ee;border:1px solid #9fd8b8}
     .bar i.gd{background:var(--gd)}.bar i.am{background:#e0a100}.bar i.bd{background:var(--bd)}
     .tw{overflow:auto;border:1px solid var(--line);border-radius:10px;margin-top:12px;max-height:70vh}
     table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
@@ -144,7 +148,7 @@ body{background:#e8edf5}
 
       <div class="stats">
         <div class="stat"><small>Achievement Daily</small><div class="d" id="s-dd"></div><div class="big" id="s-dp"></div><div class="bar"><i id="s-db"></i></div><div class="n" id="s-dn"></div></div>
-        <div class="stat"><small>Achievement MTD</small><div class="d" id="s-md"></div><div class="big" id="s-mp"></div><div class="bar"><i id="s-mb"></i></div><div class="n" id="s-mn"></div></div>
+        <div class="stat"><small>Achievement MTD</small><div class="d" id="s-md"></div><div class="big" id="s-mp"></div><div class="bar"><i id="s-mb"></i></div><div class="gap" id="s-mg" hidden></div><div class="n" id="s-mn"></div></div>
       </div>
 
       <div class="card" id="fu-card" hidden>
