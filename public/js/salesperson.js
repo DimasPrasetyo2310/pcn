@@ -116,11 +116,13 @@ function render(r){
   $('s-mb').style.width=Math.min(100,Math.max(0,mp||0))+'%';
   $('s-mb').className=cls(mp);
   $('s-mn').textContent='Actual Rp '+rp(mA)+' dari budget Rp '+rp(mB);
-  // Selisih actual MTD vs budget MTD: merah jika kurang, hijau jika sudah tercapai
-  { const g=$('s-mg'), gp=mA-mB;
-    if(!(mB>0)){ g.hidden=true; }
-    else { g.hidden=false; g.className='gap '+(gp<0?'neg':'pos');
-      g.innerHTML=gp<0?'<small>Kurang dari budget MTD</small>🔥 −Rp '+rp(-gp):'<small>Sudah achieve, lebih dari budget MTD</small>🏆 +Rp '+rp(gp); } }
+  // Selisih actual vs budget (Daily dan MTD): merah jika kurang, hijau jika sudah tercapai
+  const gapBox=(id,act,bud,lab)=>{ const g=$(id), gp=act-bud;
+    if(!(bud>0)){ g.hidden=true; return; }
+    g.hidden=false; g.className='gap '+(gp<0?'neg':'pos');
+    g.innerHTML=gp<0?'<small>Kurang dari budget '+lab+'</small>🔥 −Rp '+rp(-gp):'<small>Sudah achieve, lebih dari budget '+lab+'</small>🏆 +Rp '+rp(gp); };
+  gapBox('s-dg', da, (last&&lw)?tpe:0, 'Daily');
+  gapBox('s-mg', mA, mB, 'MTD');
 
   const st=t=>{if(!t)return '–';const d=new Date(t);return isNaN(d)?'–':d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear()+', '+String(d.getHours()).padStart(2,'0')+'.'+String(d.getMinutes()).padStart(2,'0')};
   $('stamp').textContent='Jadwal diunggah: '+st(r.sched_at)+' · Data penjualan diunggah: '+st(r.data_at)+' · Dimuat: '+st(new Date().toISOString());
