@@ -581,8 +581,22 @@ async function doUpload(files){
       else if(r.kind==='detail'||!r.kind){const n0=new Set((r.rows||[]).map(x=>x.sale_date)).size;['rows','items','cube','dims','brands','members'].forEach(a=>{if(r[a])r[a]=fl(r[a],'sale_date')});const n1=new Set((r.rows||[]).map(x=>x.sale_date)).size;if(n0-n1)bad.push(r.name+': '+(n0-n1)+' hari di luar '+ml+' diabaikan')}
     }
     for(let i=ok.length-1;i>=0;i--){const r=ok[i];if((r.kind==='nav'||r.kind==='phasing'||r.kind==='kpibudget'||r.kind==='detail')&&!(r.rows||[]).length)ok.splice(i,1)}
-    UPMON=null;
   }
+  const LOWD=new Set();
+  /* Penjagaan: total Sales Detail per hari tidak boleh jauh di bawah Sales NAV hari itu (file terpotong/salah filter akan menimpa data benar dengan angka kecil) */
+  for(const r of ok){
+    if(r.kind!=='detail'||!Array.isArray(r.rows)) continue;
+    const tot={}; r.rows.forEach(x=>{tot[x.sale_date]=(tot[x.sale_date]||0)+(+x.sales||0)});
+    const nav=new Map([...LYD,...DATA.D.map(q=>[q.d,q])]), low=[];
+    Object.keys(tot).forEach(d=>{const q=nav.get(d); if(q&&q.navr>0&&tot[d]<q.navr*0.7) low.push(d)});
+    if(low.length){
+      low.forEach(d=>LOWD.add(d));
+      const lowSet=new Set(low), n0=Object.keys(tot).length;
+      ['rows','items','cube','dims','brands','members'].forEach(k=>{if(Array.isArray(r[k]))r[k]=r[k].filter(x=>!lowSet.has(x.sale_date))});
+      bad.push('DITOLAK '+r.name+': '+low.length+' dari '+n0+' hari tidak disimpan karena total Sales Detail jauh di bawah Sales NAV hari itu (kurang dari 70%), mis. '+low.slice(0,3).map(d=>d+' '+en(tot[d])+' vs NAV '+en(nav.get(d).navr)).join('; ')+(low.length>3?', ...':'')+'. File kemungkinan terpotong atau salah filter; data lama dibiarkan. Unggah ulang laporan Sales Detail lengkap (Excel).');
+    }
+  }
+  for(let i=ok.length-1;i>=0;i--){const r=ok[i];if(r.kind==='detail'&&!(r.rows||[]).length)ok.splice(i,1)}
   for(const r of ok){
     try{
       if(r.kind==='nav'){await upsertChunks('store_daily',r.rows,'store_code,sale_date');parts.push('Report Compare FFC dan NAV: '+r.rows.length+' hari')}
@@ -615,6 +629,7 @@ async function doUpload(files){
     try{
       const pr=window.SalesSync.parseReport(XLSX,sf.b,STORE), days=pr.days;
       if(UPMON) Object.keys(days).forEach(d=>{if(d.slice(0,7)!==UPMON)delete days[d]});
+      Object.keys(days).forEach(d=>{if(LOWD.has(d))delete days[d]});
       const nd=Object.keys(days).length;
       if(!nd){bad.push('Dashboard salesperson dari '+sf.f.name+': tidak ada hari yang sesuai bulan yang dipilih');continue}
       const rs=await window.SalesSync.save(SB,STORE,days,sf.f.name);
@@ -622,6 +637,7 @@ async function doUpload(files){
       else parts.push('Dashboard salesperson ikut diperbarui: '+nd+' hari, '+nf.format(pr.used)+' baris');
     }catch(err){bad.push('Dashboard salesperson dari '+sf.f.name+': '+explain(err))}
   }
+  UPMON=null;
   if(parts.length){await loadData();const r=presetRange('all');setRange(r[0],r[1])}
   const qc=parts.length?qcIssues():[]; BADNOTE.splice(0).forEach(x=>qc.push(x));
   if(parts.length&&!bad.length&&qc.length) showMsg('Tersimpan, tetapi ada data yang perlu dicek: '+qc.slice(0,5).join(' · ')+(qc.length>5?' · +'+(qc.length-5)+' lainnya':'')+'. '+parts.join(' · '),'err');
