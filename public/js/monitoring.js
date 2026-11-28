@@ -16,7 +16,10 @@ const MON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','De
 const fd=iso=>{const p=iso.split('-');return (+p[2])+' '+MON[+p[1]-1]};
 const fdy=iso=>fd(iso)+' '+iso.slice(0,4);
 const CUTOFF_JAM=2;
-const reportDay=()=>{const d=new Date(Date.now()-CUTOFF_JAM*36e5);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+/* Khusus event Late Nite Sales 28-29 Nov 2026: sampai 29 Nov jam 05.00 WIB, penjualan tanggal 29 digabung ke 28 (total kemarin + hari ini) dan tanggal 29 dihitung dari 0 lagi mulai jam 05.00 */
+const EVT_FROM=Date.UTC(2026,10,28,17,0), EVT_TO=Date.UTC(2026,10,28,22,0);
+const evtActive=()=>{const n=Date.now();return n>=EVT_FROM&&n<EVT_TO};
+const reportDay=()=>{const d=new Date(Date.now()-(evtActive()?5:CUTOFF_JAM)*36e5);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const addDays=(iso,n)=>new Date(Date.parse(iso+'T00:00:00Z')+n*864e5).toISOString().slice(0,10);
 const title=s=>s.toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
@@ -1457,6 +1460,16 @@ async function loadData(){
     C:c.filter(r=>+r.sale_date.slice(0,4)===yr).map(r=>[r.sale_date,r.category,+r.sales]),
     B:b
   };
+  if(evtActive()){
+    const a=DATA.D.find(x=>x.d==='2026-11-28'), b=DATA.D.find(x=>x.d==='2026-11-29');
+    if(a&&b){
+      ['sx','nav','navr','tr','ffc','ffct','cin','cout'].forEach(k=>{a[k]=(+a[k]||0)+(+b[k]||0)});
+      DIMD.filter(z=>z.d==='2026-11-29').forEach(z=>DIMD.push({d:'2026-11-28',dim:z.dim,v:z.v,s:z.s}));
+      DATA.C.filter(c=>c[0]==='2026-11-29').forEach(c=>DATA.C.push(['2026-11-28',c[1],c[2]]));
+      DATA.D=DATA.D.filter(x=>x.d!=='2026-11-29'); DATA.C=DATA.C.filter(c=>c[0]!=='2026-11-29');
+      for(let i=DIMD.length-1;i>=0;i--) if(DIMD[i].d==='2026-11-29') DIMD.splice(i,1);
+    }
+  }
   try{renderQc()}catch(e2){}
   try{kcInit()}catch(e3){}
 }
