@@ -205,7 +205,7 @@ function parseZona(XLSX, buf, storeCode, master){
     for(let k=0;k<dim;k++){
       const raw = String(r[4+k]).trim().toUpperCase();
       if(raw===''){ add('Sel '+colName(4+k)+rn+' ('+(nm||'baris '+rn)+', tanggal '+(k+1)+') kosong. Isi kode jadwal, gunakan OFF untuk hari libur.'); bad=true; c.push(''); continue; }
-      if(!ZKODE.includes(raw)){ add('Sel '+colName(4+k)+rn+' ('+(nm||'baris '+rn)+', tanggal '+(k+1)+'): kode "'+String(r[4+k]).trim()+'" tidak dikenal. Kode yang boleh: '+ZKODE.join(', ')+'.'); bad=true; }
+      /* Kode di luar daftar baku (mis. P/JKP, S/JKS, RO/25) tetap diterima apa adanya untuk semua zona */
       c.push(raw);
     }
     if(!bad) people.push({id, name:nm, brand:br, zona:zn, c});
@@ -1570,7 +1570,7 @@ function abItems(){
       up? 'Diunggah TL '+when+' · '+zi.n+' orang' : 'Sudah ada di jadwal (dianggap sudah input)',
       zi&&zi.month? 'Terakhir untuk '+ml+', belum ada untuk '+CKMON[P.m-1]+' '+P.y : 'Belum ada jadwal '+CKMON[P.m-1]+' '+P.y,
       [up? 'Sumber: '+(zi.source||'-')+' ('+zi.n+' orang). '+ppl.length+' orang tercatat di '+zn+'.' : (okM? ppl.length+' orang di '+zn+' sudah punya jadwal sampai '+ckLab(P.ref)+'. TL boleh memperbarui dengan format ABSENSI.' : 'Jadwal '+zn+' untuk '+CKMON[P.m-1]+' '+P.y+' belum ada. TL zonasi mengunggah file ABSENSI '+zn+'.'),
-       'Format baku: baris 1 = SALESPERSON ID, NAMA, BRAND, ZONA, 1, 2, 3 … sampai akhir bulan. Nama sheet berisi bulan dan tahun (contoh NOVEMBER 2026). Kode: '+ZKODE.join(', ')+'. File yang tidak sesuai ditolak beserta alasannya.'],['zona:'+zn]);
+       'Format baku: baris 1 = SALESPERSON ID, NAMA, BRAND, ZONA, 1, 2, 3 … sampai akhir bulan. Nama sheet berisi bulan dan tahun (contoh NOVEMBER 2026). Kode: '+ZKODE.join(', ')+', kode lain (mis. P/JKP, S/JKS, RO/25) juga diterima. File yang tidak sesuai format ditolak beserta alasannya.'],['zona:'+zn]);
   });
   return out;
 }
