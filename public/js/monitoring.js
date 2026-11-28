@@ -15,6 +15,8 @@ const pad=n=>String(n).padStart(2,'0');
 const MON=['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 const fd=iso=>{const p=iso.split('-');return (+p[2])+' '+MON[+p[1]-1]};
 const fdy=iso=>fd(iso)+' '+iso.slice(0,4);
+const CUTOFF_JAM=2;
+const reportDay=()=>{const d=new Date(Date.now()-CUTOFF_JAM*36e5);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
 const addDays=(iso,n)=>new Date(Date.parse(iso+'T00:00:00Z')+n*864e5).toISOString().slice(0,10);
 const title=s=>s.toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
@@ -1347,7 +1349,8 @@ async function renderWa(){
   if(!D.length){$('waText').value='Belum ada data. Unggah laporan lewat tombol Unggah.';return}
   const dates=D.map(r=>r.d).sort();
   inp.min=dates[0]; inp.max=dates[dates.length-1];
-  if(!inp.value||!dates.includes(inp.value)) inp.value=dates[dates.length-1];
+  /* Cut off hari laporan: sebelum jam CUTOFF_JAM pagi, laporan masih milik kemarin (omset sampai jam itu tetap dihitung ke hari kemarin) */
+  if(!inp.value||!dates.includes(inp.value)){const eff=reportDay(),ok=dates.filter(x=>x<=eff);inp.value=ok.length?ok[ok.length-1]:dates[dates.length-1]}
   if(!$('waTime').value){const n=new Date();$('waTime').value=pad2(n.getHours())+':'+pad2(n.getMinutes())}
   const d=inp.value;
   if(WAD!==d){
