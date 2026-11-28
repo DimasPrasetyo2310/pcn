@@ -172,7 +172,7 @@ async function load(code,fromForm){
     timer=setInterval(()=>{if(!document.hidden)load(CODE,false)},30000);
   }catch(e){
     try{console.error('sp',e)}catch(_){}
-    if(fromForm||$('login').hidden){showLogin();showErr('Gagal terhubung. Periksa internet Anda lalu coba lagi.')}
+    if(fromForm||$('view').hidden){showLogin();showErr('Gagal terhubung. Periksa internet Anda lalu coba lagi.')}
   }finally{
     btn.disabled=false;btn.textContent='Lihat pencapaian';
   }
