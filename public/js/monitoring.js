@@ -454,9 +454,9 @@ function ckItems(){
     [nb?'Budget '+MON[P.m-1]+' '+P.y+' tersedia untuk '+nb+' kategori.':'Budget '+MON[P.m-1]+' '+P.y+' belum ada.','Isi: target sales bulanan tiap kategori. Satu file untuk satu tahun.'],['budget']);
   const mp=all.filter(d=>!PH.has(d));
   mk('phasing','Budget harian (phasing %)','File: sheet "budget daily" (baris Tanggal dan cont %)',mp,null,'Lengkap '+dim+' hari',mp.length+' tanggal belum ada',
-    [mp.length?'Belum ada: '+dlist(mp):'Semua '+dim+' hari sudah ada.','Isi: persentase kontribusi target tiap tanggal. Jumlah sebulan = 100%. Kolom PERSENTASE di file Budget KPI juga otomatis mengisi ini, jadi satu file KPI sudah cukup.'],['phasing']);
+    [mp.length?'Belum ada: '+dlist(mp):'Semua '+dim+' hari sudah ada.','Isi: persentase kontribusi target tiap tanggal. Jumlah sebulan = 100%.'],['phasing']);
   const mk2=all.filter(d=>!KB.has(d));
-  mk('kpi','Budget traffic, invoice, basket size, dan Protection BCA','File: budget traffic dan invoice (format standar: PERSENTASE, TANGGAL, TRAFFIC, INVOICE, EFFECTIVE TRAFFIC, BASKET SIZE, mitra10 proteksi; baris 2 berisi BUDGET, data mulai baris 3)',mk2,null,'Lengkap '+dim+' hari',mk2.length+' tanggal belum ada',
+  mk('kpi','Budget traffic, invoice, basket size, dan Protection BCA','File: budget traffic dan invoice (kolom Tanggal, Traffic, Invoice, Effective Traffic, Basket Size, Mitra10 Proteksi)',mk2,null,'Lengkap '+dim+' hari',mk2.length+' tanggal belum ada',
     [mk2.length?'Belum ada: '+dlist(mk2):'Semua '+dim+' hari sudah ada.','Isi: target harian traffic, invoice, efektivitas, basket size, dan QTY Protection. Dipakai di kartu laporan WhatsApp dan Report Closing.'],['kpi']);
   const ml=exp.filter(d=>{const l=lyDate(d);return !LYD.has(l)||!lyc.has(l)});
   mk('ly','Data tahun lalu (pembanding LY)','File: Compare FFC and NAV dan Sales Detail tahun '+(P.y-1),ml,null,'Lengkap sampai '+dlab(P.ref),ml.length+' tanggal belum ada',
@@ -466,27 +466,21 @@ function ckItems(){
 const TPL={nav:'Compare FFC NAV',detail:'Sales Detail',budget:'Budget Bulanan',phasing:'Budget Harian',kpi:'Budget KPI'};
 function tplSheets(kind,y,m){
   const mm=pad2(m), dim=new Date(y,m,0).getDate(), days=[...Array(dim)].map((_,i)=>y+'-'+mm+'-'+pad2(i+1));
-  if(kind==='nav'){
-    /* Format sama dengan ekspor sistem "Report Compare FFC And Nav" (judul 5 baris, header baris 6, data mulai baris 7), terisi data yang tersimpan agar bisa dicek dan diganti manual */
-    const have=new Map([...LYD, ...DATA.D.map(r=>[r.d,r])]), ser=d=>Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10))/864e5+25569, md=d=>(+d.slice(5,7))+'/'+(+d.slice(8,10))+'/'+d.slice(0,4), nw=new Date();
-    const rws=[['Template Dashboard Monitoring - Data Report: '+nw.getDate()+' '+MON[nw.getMonth()]+' '+nw.getFullYear()],['Report Compare FFC And Nav'],['Start Date: '+md(days[0])+' 12:00:00 AM, End Date: '+md(days[days.length-1])+' 12:00:00 AM'],['Penarikan Receipt tidak termasuk :\nreceipt yang berisi hanya pembayaran delivery charge, donation, change card, atau service lain (tanpa pembelian item/barang).'],[],
-      ['Date','Store No (NAV)','Store Name (NAV)','Sales Exclude Tax (NAV)','Total Transaction (NAV)','Basket Size (Sales Exclude Tax/Total Transaction )','Sales Exclude Tax (FFC)','Total Transaction (FFC)','Total Counter In','Total Counter Out','Sales Difference ','Transaction Difference']];
-    days.forEach(d=>{const r=have.get(d);rws.push(r?[ser(d),STORE,'MITRA10 PERCETAKAN NEGARA',r.navr,r.tr,r.tr?r.navr/r.tr:0,r.ffc,r.ffct,r.cin,r.cout,r.navr-r.ffc,r.tr-r.ffct]:[ser(d),STORE,'MITRA10 PERCETAKAN NEGARA',null,null,null,null,null,null,null,null,null])});
-    return {name:'Report Compare FFC And Nav',rows:rws,from:7,fmt:{A:'m/d/yyyy',D:'#,##0.00',E:'#,##0',F:'#,##0.00',G:'#,##0.00',H:'#,##0',I:'#,##0',J:'#,##0',K:'#,##0.00',L:'#,##0'},cols:[12,14,28,22,22,30,22,22,16,16,16,20]};
-  }
+  if(kind==='nav') return {name:'Compare FFC NAV',rows:[['Date','Store No (NAV)','Sales Exclude Tax (NAV)','Total Transaction (NAV)','Sales Exclude Tax (FFC)','Total Transaction (FFC)','Total Counter In','Total Counter Out'],...days.map(d=>[d,STORE,null,null,null,null,null,null])]};
   if(kind==='detail') return {name:'Sales Detail',rows:[['Receipt Date','Store No','Category','Sub Category','Function','Sub Function','Master Brand','Brand','Item No','Item Name','Source Type Name','Master Type Brand','Quantity','Amount Include Sales','Amount Exclude Sales','Receipt No']]};
-  if(kind==='budget'){const cats=[...new Set(DATA.C.map(c=>c[1]))].sort();return {name:'Budget '+y,rows:[['Category','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],...(cats.length?cats:['KATEGORI 1']).map(c=>[c,...Array.from({length:12},(_,k)=>{const v=BM.get(y+'|'+(k+1)+'|'+c);return typeof v==='number'?v:null})])]}}
-  if(kind==='phasing') return {name:'Budget daily '+MON[m-1]+' '+y,rows:[[MON[m-1].toUpperCase()],['CATEGORY','Tanggal',...days.map((_,i)=>i+1)],[MON[m-1].toUpperCase(),'cont %',...days.map(d=>{const v=PH.get(d);return typeof v==='number'?v:null})]]};
-  const R=[['PERSENTASE','TANGGAL','TRAFFIC','INVOICE','EFFECTIVE TRAFFIC','BASKET SIZE','mitra10 proteksi'],[null,null,'BUDGET','BUDGET','BUDGET','BUDGET','BUDGET']];
-  days.forEach(d=>{const ph=PH.get(d),k=KB.get(d)||{};R.push([typeof ph==='number'?ph:null,d,k.tr||null,k.iv||null,k.ef||null,k.bs||null,k.pq||null])});
-  return {name:'Budget KPI '+MON[m-1]+' '+y,rows:R,kpi:true};
+  if(kind==='budget'){const cats=[...new Set(DATA.C.map(c=>c[1]))].sort();return {name:'Budget '+y,rows:[['Category','JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'],...(cats.length?cats:['KATEGORI 1']).map(c=>[c,...Array(12).fill(null)])]}}
+  if(kind==='phasing') return {name:'Budget daily '+MON[m-1]+' '+y,rows:[[MON[m-1].toUpperCase()],['CATEGORY','Tanggal',...days.map((_,i)=>i+1)],['','cont %',...days.map(()=>null)]]};
+  const R=[['LY','PERSENTASE','TANGGAL','TRAFFIC',null,null,null,null,'MTD',null,null,'INVOICE',null,null,null,null,'EFFECTIVE TRAFFIC',null,null,null,null,'BASKET SIZE',null,null,null,null,'MITRA10 PROTEKSI'],[],[]];
+  days.forEach(d=>{const r=Array(28).fill(null);r[2]=d;R.push(r)});
+  R[1][3]='BUDGET';R[1][11]='BUDGET';R[1][16]='BUDGET';R[1][21]='BUDGET';R[1][27]='BUDGET';
+  return {name:'Budget KPI '+MON[m-1]+' '+y,rows:R};
 }
 function tplGuide(y,m){return {name:'Petunjuk',rows:[['PETUNJUK TEMPLATE UNGGAH DASHBOARD MONITORING'],[''],['1. Isi hanya sheet data. Jangan ubah nama kolom di baris judul.'],['2. Sheet Petunjuk ini otomatis dilewati saat diunggah.'],['3. Compare FFC NAV: satu baris per tanggal, isi sales dan transaksi NAV dan FFC, serta Total Counter In dan Out.'],['4. Sales Detail: tempel data laporan Sales Detail dari sistem di bawah baris judul. Kolom wajib: Receipt Date, Category, Amount Exclude Sales. Kolom lain (Master Brand, Item No, Item Name, Source Type Name, Master Type Brand, Quantity) mengisi popup dan tabel.'],['5. Budget Bulanan: satu baris per kategori, isi target tiap bulan. Tahun dibaca dari nama sheet.'],['6. Budget Harian: isi baris cont % dengan persentase kontribusi tiap tanggal (jumlah 100%). Nama bulan di baris pertama, tahun dari nama sheet.'],['7. Budget KPI: isi Traffic (kolom D), Invoice (L), Effective Traffic (Q), Basket Size (V), Mitra10 Proteksi (AB) per tanggal.'],['8. Unggah lewat tombol Unggah database. Data tanggal yang sama akan diganti. Satu file boleh berisi beberapa sheet.'],['Periode template ini: '+MON[m-1]+' '+y]]}}
 function dlTpl(kinds){
   if(typeof XLSX==='undefined'){showMsg('Pustaka Excel belum termuat. Coba lagi sebentar.','err');return}
   const P=ckPeriod(), wb=XLSX.utils.book_new();
-  kinds.forEach(k=>{const y=(k==='nav'||k==='detail')&&kinds.ly?P.y-1:P.y;const t=tplSheets(k,y,P.m),ws=XLSX.utils.aoa_to_sheet(t.rows);if(t.fmt){for(let r=(t.from||1);r<=t.rows.length;r++)Object.keys(t.fmt).forEach(c=>{const a=c+r;if(ws[a])ws[a].z=t.fmt[c]});if(t.cols)ws['!cols']=t.cols.map(w=>({wch:w}))}if(t.kpi){ws['!cols']=[{wch:12},{wch:12},{wch:12},{wch:12},{wch:18},{wch:14},{wch:18}];for(let r=3;r<=t.rows.length;r++){[['A','0.00%'],['C','#,##0'],['D','#,##0'],['E','0.00%'],['F','#,##0'],['G','#,##0']].forEach(([c,z])=>{const a=c+r;if(!ws[a])ws[a]={t:'z'};ws[a].z=z})}}XLSX.utils.book_append_sheet(wb,ws,t.name)});
-  if(!(kinds.length===1&&kinds[0]==='kpi')){const g=tplGuide(P.y,P.m);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(g.rows),g.name)}
+  kinds.forEach(k=>{const y=(k==='nav'||k==='detail')&&kinds.ly?P.y-1:P.y;const t=tplSheets(k,y,P.m);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(t.rows),t.name)});
+  const g=tplGuide(P.y,P.m);XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(g.rows),g.name);
   XLSX.writeFile(wb,'template-'+(kinds.length>1?'semua':kinds[0])+'-'+P.y+'-'+pad2(P.m)+'.xlsx');
 }
 function renderCk(){
